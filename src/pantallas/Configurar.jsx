@@ -14,6 +14,7 @@ import { limites } from "../lib/guias.js";
 import { EJEMPLOS, ORDEN_EJEMPLOS, NOMBRES_CORTOS_EJEMPLOS } from "../datos/ejemplos.js";
 import BarraOpciones from "../componentes/BarraOpciones.jsx";
 import Galeria from "../componentes/Galeria.jsx";
+import { TECLA } from "../lienzo/Lienzo.js";
 
 const HERRAMIENTAS = [["seleccionar", "Mover"], ["cable", "Cable"], ["resistencia", "Resistencia"], ["bombillo", "Bombillo"], ["interruptor", "Interruptor"], ["bateria", "Batería"]];
 const PASOS = ["Coloca componentes", "Conéctalos con cables", "Simula"];
@@ -245,7 +246,7 @@ export default function Configurar({ ir }) {
           <div className="fin">
             <div style={{ padding: "0 14px 6px" }}><Switch on={prediccion} onChange={(v) => { setPrediccion(v); setPredReal(null); setPredTxt(""); }}>Modo predicción</Switch></div>
             <div style={{ padding: "0 14px 6px" }}><Switch on={reducir} onChange={cambiarMovimiento}>Reducir movimiento</Switch></div>
-            <div className="atajos" title="Shift: seguir colocando la misma pieza">R girar · Supr borrar</div>
+            <div className="atajos" title="Shift: seguir colocando la misma pieza">{TECLA}+Z deshacer · {TECLA}+C/V copiar y pegar · R girar · Supr borrar</div>
           </div>
         </div>
         <LienzoVista opciones={{ animacionSuave: true }} onListo={(x) => { Lr.current = x; setL(x); }} onCambio={alCambiarCircuito}

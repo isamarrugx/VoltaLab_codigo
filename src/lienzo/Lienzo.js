@@ -26,6 +26,25 @@ export function velocidadPara(i) {
 }
 const fmtCorriente = (a) => (Math.abs(a) < 1 ? `${(a * 1000).toFixed(1)} mA` : `${a.toFixed(3)} A`);
 const eq = (p, q) => p[0] === q[0] && p[1] === q[1];
+const kp = (p) => `${p[0]},${p[1]}`;
+// Tecla de los atajos: ⌘ en Mac, Ctrl en el resto.
+export const TECLA = typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl";
+// Lo copiado se comparte entre tableros, así se puede pegar en otra pantalla.
+let PORTAPAPELES = null;
+const clonar = (o) => JSON.parse(JSON.stringify(o));
+
+// ¿El segmento toca el rectángulo [x0, y0, x1, y1]? (recorte de Liang–Barsky)
+function segEnRect(x1, y1, x2, y2, [rx0, ry0, rx1, ry1]) {
+  let t0 = 0, t1 = 1;
+  const dx = x2 - x1, dy = y2 - y1;
+  for (const [p, q] of [[-dx, x1 - rx0], [dx, rx1 - x1], [-dy, y1 - ry0], [dy, ry1 - y1]]) {
+    if (p === 0) { if (q < 0) return false; continue; }
+    const t = q / p;
+    if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; }
+    else { if (t < t0) return false; if (t < t1) t1 = t; }
+  }
+  return true;
+}
 
 function rr(ctx, x0, y0, x1, y1, r = 8) {
   r = Math.min(r, (x1 - x0) / 2, (y1 - y0) / 2);
@@ -52,8 +71,9 @@ export class Lienzo {
     this.valoresNuevos = { ...VALORES_DEFECTO };
     this.componentes = {}; this.cables = {};
     this._sig = 0;
-    this.seleccionado = null;
-    this._arrastrando = null; this._offset = [0, 0];
+    this.seleccionado = null;   // la pieza seleccionada cuando hay exactamente una
+    this.seleccion = new Set(); // todo lo seleccionado
+    this._arrastre = null; this._marco = null; this._espacio = false;
     this._cableEnProgreso = [];
     this.colorCableActual = cv.COLOR_CABLE_DEFECTO;
     this._ultimoResultado = null;
@@ -64,6 +84,8 @@ export class Lienzo {
     this._t0 = performance.now() / 1000; this._tUltimo = this._t0;
     this._sucio = true; this._raf = null; this._vivo = true;
     this.ancho = 300; this.alto = 300;
+    this._hist = []; this._futuro = []; this._restaurando = false;
+    this.reiniciarHistorial();
     this._enlazar();
     this._observador = new ResizeObserver(() => this.redimensionar());
     this._observador.observe(canvas.parentElement || canvas);
@@ -76,6 +98,7 @@ export class Lienzo {
     if (this._raf) cancelAnimationFrame(this._raf);
     this._observador.disconnect();
     for (const [t, f] of this._escuchas) this.canvas.removeEventListener(t, f);
+    for (const [t, f] of this._escuchasTeclado) this._destinoTeclado.removeEventListener(t, f);
   }
   redimensionar() {
     const caja = (this.canvas.parentElement || this.canvas).getBoundingClientRect();
@@ -165,7 +188,7 @@ export class Lienzo {
   // ---------- herramientas ----------
   activarHerramienta(n) {
     this.herramienta = n; this._cableEnProgreso = [];
-    if (n !== "seleccionar" && this.seleccionado) this.cambiarSeleccion(null);
+    if (n !== "seleccionar" && this.seleccion.size) this.cambiarSeleccion(null);
     this._cursor = { seleccionar: "default", cable: "crosshair" }[n] || "crosshair";
     this.canvas.style.cursor = this._cursor;
     this.pedir();
@@ -174,11 +197,51 @@ export class Lienzo {
   hayBateria() { return Object.values(this.componentes).some((c) => c.tipo === "bateria"); }
   _nuevoTag() { this._sig += 1; return `obj_${this._sig}`; }
   _notificarCambio() {
+    this._registrar();
     this._ultimoResultado = null;
     this._apagarBombillos();
     this.detenerCorriente();
     this.pedir();
     if (this.onCambio) this.onCambio();
+  }
+
+  // ---------- deshacer / rehacer ----------
+  // Cada cambio guarda una foto del circuito; deshacer vuelve a la anterior.
+  _estado() {
+    const c = {};
+    for (const [t, k] of Object.entries(this.componentes)) { c[t] = { ...k }; delete c[t].brillo; }
+    return JSON.stringify({ c, k: this.cables, s: this._sig });
+  }
+  _registrar() {
+    if (!this.editable || this._restaurando) return;
+    const e = this._estado();
+    if (e === this._hist[this._hist.length - 1]) return;
+    this._hist.push(e);
+    if (this._hist.length > 100) this._hist.shift();
+    this._futuro = [];
+  }
+  reiniciarHistorial() { this._hist = [this._estado()]; this._futuro = []; }
+  puedeDeshacer() { return this.editable && this._hist.length > 1; }
+  puedeRehacer() { return this.editable && this._futuro.length > 0; }
+  deshacer() {
+    if (!this.puedeDeshacer()) return;
+    this._futuro.push(this._hist.pop());
+    this._restaurar(this._hist[this._hist.length - 1]);
+  }
+  rehacer() {
+    if (!this.puedeRehacer()) return;
+    const e = this._futuro.pop();
+    this._hist.push(e);
+    this._restaurar(e);
+  }
+  _restaurar(e) {
+    const d = JSON.parse(e);
+    this.componentes = d.c; this.cables = d.k; this._sig = d.s;
+    for (const c of Object.values(this.componentes)) if (c.tipo === "bombillo") c.brillo = null;
+    this._brilloObjetivo = {}; this._cableEnProgreso = []; this._arrastre = null; this._marco = null;
+    this.cambiarSeleccion(null);
+    this._restaurando = true;
+    try { this._notificarCambio(); } finally { this._restaurando = false; }
   }
 
   // ---------- colocar ----------
@@ -220,7 +283,14 @@ export class Lienzo {
     const pos = (e) => { const r = cv_.getBoundingClientRect(); return [(e.clientX - r.left) / this._z, (e.clientY - r.top) / this._z]; };
     const posPx = (e) => { const r = cv_.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
     const manejadores = {
-      pointerdown: (e) => { if (e.button !== 0) return; this._shift = e.shiftKey; cv_.focus(); try { cv_.setPointerCapture(e.pointerId); } catch { /* */ } this._alClick(...pos(e)); },
+      pointerdown: (e) => {
+        if (e.button !== 0 && e.button !== 1) return;
+        if (e.button === 1) e.preventDefault();
+        this._shift = e.shiftKey; this._mod = e.shiftKey || e.ctrlKey || e.metaKey;
+        // rueda presionada o barra espaciadora: mover la vista; con el dedo, arrastrar el fondo también la mueve
+        this._panForzado = e.button === 1 || this._espacio; this._tactil = e.pointerType === "touch";
+        cv_.focus(); try { cv_.setPointerCapture(e.pointerId); } catch { /* */ } this._alClick(...pos(e));
+      },
       pointermove: (e) => { const [x, y] = pos(e); this._mouse = [x, y]; this._alMover(x, y); },
       pointerup: (e) => { try { cv_.releasePointerCapture(e.pointerId); } catch { /* */ } this._alSoltar(); },
       pointerleave: () => { this._mouse = null; this.pedir(); },
@@ -232,22 +302,53 @@ export class Lienzo {
         if (rueda) { const [x, y] = posPx(e); this.zoomarEn(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)), x, y); }
         else this.moverVista(-e.deltaX, -e.deltaY);
       },
-      keydown: (e) => {
-        if (e.key === "Delete" || e.key === "Backspace") { this.eliminarSeleccionado(); e.preventDefault(); }
-        else if (e.key === "Escape") this._cancelarODeseleccionar();
-        else if (e.key === "r" || e.key === "R") {
-          const k = this.componentes[this.seleccionado];
-          if (this.editable && k && this.herramienta === "seleccionar") this.girar(this.seleccionado);
-          else if (this._esPieza(this.herramienta)) { this.girarNuevo = !this.girarNuevo; this.pedir(); }
-        }
-      },
     };
     this._escuchas = Object.entries(manejadores);
     for (const [t, f] of this._escuchas) cv_.addEventListener(t, f, { passive: t !== "wheel" });
+    // Los atajos del tablero editable funcionan aunque el foco esté en un botón del panel.
+    this._destinoTeclado = this.editable ? window : cv_;
+    this._escuchasTeclado = [["keydown", (e) => this._alTecla(e)], ["keyup", (e) => this._alSoltarTecla(e)]];
+    for (const [t, f] of this._escuchasTeclado) this._destinoTeclado.addEventListener(t, f);
     cv_.tabIndex = 0; cv_.style.outline = "none"; cv_.style.touchAction = this.estatico ? "pan-y" : "none";
   }
+  _alTecla(e) {
+    const t = e.target;
+    if (t && t !== this.canvas && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+    const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (e.key === " ") {
+      if (!this.editable || this.estatico || !this._mouse || mod || (t !== this.canvas && t !== document.body)) return;
+      e.preventDefault();
+      if (!this._espacio) { this._espacio = true; if (!this._pan) this.canvas.style.cursor = "grab"; }
+      return;
+    }
+    if (mod) {
+      if (!this.editable) return;
+      const textoMarcado = String(window.getSelection ? window.getSelection() : "") !== "";
+      if (k === "z") { e.preventDefault(); if (e.shiftKey) this.rehacer(); else this.deshacer(); }
+      else if (k === "y") { e.preventDefault(); this.rehacer(); }
+      else if (k === "a") { e.preventDefault(); this.seleccionarTodo(); }
+      else if ((k === "c" || k === "x") && this.seleccion.size && !textoMarcado) { e.preventDefault(); if (k === "c") this.copiar(); else this.cortar(); }
+      else if (k === "v" && PORTAPAPELES) { e.preventDefault(); this.pegar(); }
+      else if (k === "d" && this.seleccion.size) { e.preventDefault(); this.duplicar(); }
+      return;
+    }
+    if (e.key === "Delete" || e.key === "Backspace") { if (this.seleccion.size) { this.eliminarSeleccionado(); e.preventDefault(); } }
+    else if (e.key === "Escape") this._cancelarODeseleccionar();
+    else if (k === "r") {
+      const c = this.componentes[this.seleccionado];
+      if (this.editable && c && this.herramienta === "seleccionar") this.girar(this.seleccionado);
+      else if (this._esPieza(this.herramienta)) { this.girarNuevo = !this.girarNuevo; this.pedir(); }
+    }
+  }
+  _alSoltarTecla(e) {
+    if (e.key !== " " || !this._espacio) return;
+    this._espacio = false;
+    if (!this._pan) this.canvas.style.cursor = this._cursor;
+  }
   _cancelarODeseleccionar() {
+    if (this._marco) { this._marco = null; this.pedir(); }
     if (this._cableEnProgreso.length) { this._cableEnProgreso = []; this.pedir(); }
+    else if (this.seleccion.size) this.cambiarSeleccion(null);
     else { this.activarHerramienta("seleccionar"); if (this.onHerramienta) this.onHerramienta("seleccionar"); }
   }
 
@@ -268,6 +369,7 @@ export class Lienzo {
       if (!comp && !this.estatico) this._pan = [x, y];
       return;
     }
+    if (this._panForzado && !this.estatico) { this._pan = [x, y]; this.canvas.style.cursor = "grabbing"; return; }
     if (["resistencia", "bombillo", "interruptor", "bateria"].includes(this.herramienta)) {
       this._colocar(this.herramienta, punto); return;
     }
@@ -280,22 +382,23 @@ export class Lienzo {
       return;
     }
     const tag = this.tagEn(x, y);
-    if (tag && this.componentes[tag]) {
-      const comp = this.componentes[tag];
-      if (comp.tipo === "interruptor") {
-        comp.cerrado = !comp.cerrado;
-        this._pingComponente(tag, comp.cerrado ? E.COLOR_EXITO : E.COLOR_TEXTO_SECUNDARIO);
-        this._notificarCambio();
-      }
+    if (!tag) {
+      if (this._tactil) { this._pan = [x, y]; return; }
+      // arrastrar sobre el fondo dibuja un recuadro de selección (con Shift/Ctrl se suma a lo que ya había)
+      this._marco = { x0: x, y0: y, x1: x, y1: y, base: this._mod ? [...this.seleccion] : [] };
+      if (!this._mod) this.cambiarSeleccion(null);
+      this.pedir();
+      return;
     }
-    this.cambiarSeleccion(tag);
-    if (tag && this.componentes[tag]) {
-      const [x1, y1] = this.pixel(this.componentes[tag].punto_a);
-      this._arrastrando = tag; this._offset = [x - x1, y - y1]; this._huboArrastre = false;
-    } else {
-      this._arrastrando = null;
-      if (!tag) this._pan = [x, y];
+    if (this._mod) {
+      const sel = new Set(this.seleccion);
+      if (sel.has(tag)) sel.delete(tag); else sel.add(tag);
+      this._fijarSeleccion([...sel]);
+      return;
     }
+    if (!this.seleccion.has(tag)) this.cambiarSeleccion(tag);
+    // se arrastra desde una pieza; los cables seleccionados se mueven con ella
+    this._arrastre = { tag, ultimo: this.componentes[tag] ? this.punto(x, y) : null, movido: false };
   }
 
   _alMover(x, y) {
@@ -306,19 +409,15 @@ export class Lienzo {
       this.moverVista(x - x0, y - y0);
       return;
     }
-    if (this.editable && this.herramienta === "seleccionar" && this._arrastrando) {
-      const comp = this.componentes[this._arrastrando];
-      if (!comp) return;
-      const nuevo = this.punto(x - this._offset[0], y - this._offset[1]);
-      const df = comp.punto_b[0] - comp.punto_a[0], dc = comp.punto_b[1] - comp.punto_a[1];
-      if (!eq(nuevo, comp.punto_a)) this._huboArrastre = true;
-      const viejoA = comp.punto_a, viejoB = comp.punto_b;
-      const nuevoB = [nuevo[0] + df, nuevo[1] + dc];
-      if (!eq(nuevo, viejoA)) {
-        for (const k of Object.values(this.cables)) k.puntos = k.puntos.map((q) => (eq(q, viejoA) ? nuevo : eq(q, viejoB) ? nuevoB : q));
-      }
-      comp.punto_a = nuevo; comp.punto_b = nuevoB;
-      this.pedir();
+    if (this._marco) {
+      this._marco.x1 = x; this._marco.y1 = y;
+      this._fijarSeleccion([...this._marco.base, ...this._tagsEnMarco()]);
+      return;
+    }
+    const a = this._arrastre;
+    if (this.editable && this.herramienta === "seleccionar" && a && a.ultimo) {
+      const g = this.punto(x, y), df = g[0] - a.ultimo[0], dc = g[1] - a.ultimo[1];
+      if (df || dc) { this._desplazar([...this.seleccion], df, dc); a.ultimo = g; a.movido = true; this.pedir(); }
       return;
     }
     if (this.herramienta === "seleccionar") {
@@ -329,9 +428,49 @@ export class Lienzo {
   }
   _esPieza(h) { return ["resistencia", "bombillo", "interruptor", "bateria"].includes(h); }
   _alSoltar() {
-    if (this._pan) { this._pan = null; this.canvas.style.cursor = this._cursor; this.pedir(); }
-    if (this._arrastrando) { if (this._huboArrastre) this._notificarCambio(); }
-    this._arrastrando = null;
+    if (this._pan) { this._pan = null; this.canvas.style.cursor = this._espacio ? "grab" : this._cursor; this.pedir(); }
+    if (this._marco) { this._marco = null; this.pedir(); }
+    const a = this._arrastre;
+    this._arrastre = null;
+    if (!a) return;
+    if (a.movido) { this._notificarCambio(); return; }
+    // un clic sin arrastrar: dentro de un grupo deja solo esa pieza; sobre un interruptor lo alterna
+    if (this.seleccion.size > 1) { this.cambiarSeleccion(a.tag); return; }
+    const comp = this.componentes[a.tag];
+    if (comp && comp.tipo === "interruptor") {
+      comp.cerrado = !comp.cerrado;
+      this._pingComponente(a.tag, comp.cerrado ? E.COLOR_EXITO : E.COLOR_TEXTO_SECUNDARIO);
+      this._notificarCambio();
+    }
+  }
+  // Mueve las piezas y cables indicados; los cables sueltos conectados a ellas las siguen.
+  _desplazar(tags, df, dc) {
+    const sel = new Set(tags), mover = (p) => [p[0] + df, p[1] + dc], mapa = new Map();
+    for (const t of tags) {
+      const c = this.componentes[t]; if (!c) continue;
+      mapa.set(kp(c.punto_a), mover(c.punto_a)); mapa.set(kp(c.punto_b), mover(c.punto_b));
+      c.punto_a = mover(c.punto_a); c.punto_b = mover(c.punto_b);
+    }
+    for (const [t, k] of Object.entries(this.cables)) {
+      const extremos = [k.puntos[0], k.puntos[k.puntos.length - 1]];
+      if (sel.has(t) || extremos.every((p) => mapa.has(kp(p)))) k.puntos = k.puntos.map(mover);
+      else k.puntos = k.puntos.map((q) => mapa.get(kp(q)) || q);
+    }
+  }
+  _tagsEnMarco() {
+    const m = this._marco;
+    const r = [Math.min(m.x0, m.x1), Math.min(m.y0, m.y1), Math.max(m.x0, m.x1), Math.max(m.y0, m.y1)];
+    if (r[2] - r[0] < 4 && r[3] - r[1] < 4) return [];
+    const dentro = [];
+    for (const [t, c] of Object.entries(this.componentes)) {
+      const [x1, y1] = this.pixel(c.punto_a), [x2, y2] = this.pixel(c.punto_b);
+      if (segEnRect(x1, y1, x2, y2, r)) dentro.push(t);
+    }
+    for (const [t, k] of Object.entries(this.cables)) {
+      const p = k.puntos.map((q) => this.pixel(q));
+      for (let i = 0; i + 1 < p.length; i++) if (segEnRect(...p[i], ...p[i + 1], r)) { dentro.push(t); break; }
+    }
+    return dentro;
   }
   _alDoble(x, y) {
     if (this.herramienta === "cable" && this._cableEnProgreso.length) {
@@ -343,25 +482,91 @@ export class Lienzo {
   }
 
   // ---------- seleccion ----------
-  cambiarSeleccion(tag) {
+  cambiarSeleccion(tag) { this._fijarSeleccion(tag ? [tag] : []); }
+  _fijarSeleccion(tags) {
+    const nueva = new Set(tags.filter((t) => this.componentes[t] || this.cables[t]));
+    const igual = nueva.size === this.seleccion.size && [...nueva].every((t) => this.seleccion.has(t));
     const ant = this.seleccionado;
-    this.seleccionado = tag || null;
-    if (tag && tag !== ant && !this.suave) this._pingComponente(tag, E.COLOR_CIAN);
+    this.seleccion = nueva;
+    this.seleccionado = nueva.size === 1 ? [...nueva][0] : null;
+    if (this.seleccionado && this.seleccionado !== ant && !this.suave && !this._marco) this._pingComponente(this.seleccionado, E.COLOR_CIAN);
     this.pedir();
-    if (this.onSeleccion) this.onSeleccion(this.seleccionado);
+    // mientras se dibuja el recuadro solo se avisa cuando la selección cambia
+    if (this.onSeleccion && (!igual || !this._marco)) this.onSeleccion(this.seleccionado);
+  }
+  seleccionarTodo() {
+    if (!this.editable) return;
+    if (this.herramienta !== "seleccionar") { this.activarHerramienta("seleccionar"); if (this.onHerramienta) this.onHerramienta("seleccionar"); }
+    this._fijarSeleccion([...Object.keys(this.componentes), ...Object.keys(this.cables)]);
   }
   eliminarSeleccionado() {
-    if (!this.editable || !this.seleccionado) return;
-    const tag = this.seleccionado;
-    delete this.componentes[tag]; delete this.cables[tag];
+    if (!this.editable || !this.seleccion.size) return;
+    for (const t of this.seleccion) { delete this.componentes[t]; delete this.cables[t]; }
     this.cambiarSeleccion(null);
     this._notificarCambio();
+  }
+
+  // ---------- copiar y pegar ----------
+  copiar() {
+    if (!this.seleccion.size) return;
+    const comps = [], cables = [];
+    for (const t of this.seleccion) {
+      if (this.componentes[t]) { const c = clonar(this.componentes[t]); delete c.brillo; comps.push(c); }
+      else if (this.cables[t]) cables.push(clonar(this.cables[t]));
+    }
+    PORTAPAPELES = { comps, cables, veces: 0 };
+  }
+  cortar() {
+    if (!this.editable || !this.seleccion.size) return;
+    this.copiar();
+    PORTAPAPELES.veces = -1; // lo cortado se pega en su mismo lugar
+    this.eliminarSeleccionado();
+  }
+  duplicar() { this.copiar(); this.pegar(); }
+  // Pega a la derecha de lo copiado (cada pegado se corre un poco más) y deja lo pegado seleccionado.
+  // Si ya hay una batería, la copiada no se pega: solo puede haber una.
+  pegar() {
+    const P = PORTAPAPELES;
+    if (!this.editable || !P) return 0;
+    const pts = [...P.comps.flatMap((c) => [c.punto_a, c.punto_b]), ...P.cables.flatMap((k) => k.puntos)];
+    if (!pts.length) return 0;
+    const cs = pts.map((p) => p[1]);
+    P.veces += 1;
+    const dc = (Math.max(...cs) - Math.min(...cs) + 2) * P.veces, mover = (p) => [p[0], p[1] + dc];
+    if (this.herramienta !== "seleccionar") { this.activarHerramienta("seleccionar"); if (this.onHerramienta) this.onHerramienta("seleccionar"); }
+    const nuevos = [];
+    let hayBat = this.hayBateria();
+    for (const c of P.comps) {
+      if (c.tipo === "bateria") { if (hayBat) continue; hayBat = true; }
+      const t = this._nuevoTag();
+      this.componentes[t] = { ...clonar(c), punto_a: mover(c.punto_a), punto_b: mover(c.punto_b), ...(c.tipo === "bombillo" ? { brillo: null } : {}) };
+      nuevos.push(t);
+    }
+    for (const k of P.cables) { const t = this._nuevoTag(); this.cables[t] = { color: k.color, puntos: k.puntos.map(mover) }; nuevos.push(t); }
+    this._fijarSeleccion(nuevos);
+    this._asegurarVisible(nuevos);
+    this._notificarCambio();
+    return nuevos.length;
+  }
+  hayParaPegar() { return !!PORTAPAPELES; }
+  _asegurarVisible(tags) {
+    const cajas = tags.map((t) => this.bbox(t)).filter(Boolean);
+    if (!cajas.length) return;
+    const x0 = Math.min(...cajas.map((b) => b[0])), y0 = Math.min(...cajas.map((b) => b[1]));
+    const x1 = Math.max(...cajas.map((b) => b[2])), y1 = Math.max(...cajas.map((b) => b[3]));
+    const W = this.ancho / this._z, H = this.alto / this._z, m = 30;
+    let dx = 0, dy = 0;
+    if (x1 > W - m) dx = W - m - x1;
+    if (x0 + dx < m) dx = m - x0;
+    if (y1 > H - m) dy = H - m - y1;
+    if (y0 + dy < m) dy = m - y0;
+    this.moverVista(dx * this._z, dy * this._z);
   }
   elemento(tag) { return this.componentes[tag] || this.cables[tag]; }
 
   // ---------- edicion desde el panel ----------
   establecerValor(tag, v) { const c = this.componentes[tag]; if (!c || !("valor" in c)) return; c.valor = v; this._notificarCambio(); }
-  establecerColorCable(tag, col) { if (!this.cables[tag]) return; this.cables[tag].color = col; this.pedir(); }
+  establecerColorCable(tag, col) { if (!this.cables[tag]) return; this.cables[tag].color = col; this._registrar(); this.pedir(); }
   establecerInterruptor(tag, cerrado) {
     const c = this.componentes[tag];
     if (!c || c.tipo !== "interruptor" || c.cerrado === cerrado) return;
@@ -429,6 +634,7 @@ export class Lienzo {
     for (const [a, b, c] of def.interruptores || []) this.componentes[this._nuevoTag()] = { tipo: "interruptor", punto_a: a, punto_b: b, cerrado: c };
     for (const [a, b] of def.cables || []) this.cables[this._nuevoTag()] = { puntos: [a, b], color: cv.COLOR_CABLE_DEFECTO };
     this._notificarCambio();
+    this.reiniciarHistorial(); // deshacer no regresa a lo que había antes de cargar el circuito
   }
   tagsPorTipo(tipo) {
     const n = (t) => parseInt(t.split("_").pop(), 10) || 0;
@@ -602,22 +808,33 @@ export class Lienzo {
       cv.dibujarResplandor(ctx, x1, y1, x2, y2, c.brillo);
     }
     this._dibujarGuiaFondo();
+    this._dibujarGuia(false); // caminos y recuadros por debajo: los cables quedan encima
     this._dibujarResaltadoLineas(ahora);
     for (const [tag, k] of Object.entries(this.cables)) this._dibujarCable(tag, k);
     this._dibujarParticulas();
     for (const [tag, c] of Object.entries(this.componentes)) this._dibujarComponente(tag, c);
     this._dibujarPrevisualizacion();
     this._dibujarFantasma();
-    this._dibujarGuia(ahora);
+    this._dibujarGuia(true); // textos y puntos de conexión siempre visibles
     this._dibujarNombres();
     this._dibujarResultados();
     this._dibujarResaltado(ahora);
     this._dibujarEfectos(ahora);
+    this._dibujarMarco();
+  }
+  _dibujarMarco() {
+    const m = this._marco; if (!m) return;
+    const ctx = this.ctx;
+    const x = Math.min(m.x0, m.x1), y = Math.min(m.y0, m.y1), w = Math.abs(m.x1 - m.x0), h = Math.abs(m.y1 - m.y0);
+    ctx.save();
+    ctx.globalAlpha = 0.1; ctx.fillStyle = E.COLOR_CIAN; ctx.fillRect(x, y, w, h);
+    ctx.globalAlpha = 1; ctx.setLineDash([5, 4]); ctx.strokeStyle = E.COLOR_CIAN; ctx.lineWidth = 1.2; ctx.strokeRect(x, y, w, h);
+    ctx.restore();
   }
   _dibujarCable(tag, k) {
     const ctx = this.ctx;
     const pts = k.puntos.map((p) => this.pixel(p));
-    if (tag === this.seleccionado) {
+    if (this.seleccion.has(tag)) {
       ctx.beginPath(); ctx.moveTo(...pts[0]); pts.slice(1).forEach((p) => ctx.lineTo(...p));
       ctx.strokeStyle = mezclarColor(cv.COLOR_FONDO_LIENZO, E.COLOR_CIAN, 0.35); ctx.lineWidth = 10;
       ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke();
@@ -627,7 +844,7 @@ export class Lienzo {
   _dibujarComponente(tag, c) {
     const ctx = this.ctx;
     const [x1, y1] = this.pixel(c.punto_a), [x2, y2] = this.pixel(c.punto_b);
-    const sel = tag === this.seleccionado;
+    const sel = this.seleccion.has(tag);
     if (c.tipo === "resistencia") cv.dibujarResistencia(ctx, x1, y1, x2, y2, c.valor, sel);
     else if (c.tipo === "bombillo") cv.dibujarBombillo(ctx, x1, y1, x2, y2, c.valor, c.brillo, sel);
     else if (c.tipo === "interruptor") cv.dibujarInterruptor(ctx, x1, y1, x2, y2, c.cerrado, sel);
@@ -810,11 +1027,26 @@ export class Lienzo {
       ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke();
     }
   }
-  _dibujarGuia() {
+  _dibujarGuia(frente) {
     if (!this._guia) return;
     const ctx = this.ctx, col = this._guia.color;
     const claro = mezclarColor(col, cv.COLOR_FONDO_LIENZO, 0.35);
     const onda = this._onda(1.2);
+    if (frente) {
+      for (const [tipo, a, b] of this._guia.zonas || []) {
+        const [x1, y1] = this.pixel(a), [x2, y2] = this.pixel(b);
+        cv.texto(ctx, `Coloca aquí: ${NOMBRE_PIEZA[tipo] || tipo}`, (x1 + x2) / 2, Math.min(y1, y2) - 24, col, cv.fuente(13, true));
+      }
+      for (const p of this._guia.puntos || []) {
+        const [x, y] = this.pixel(p);
+        ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill();
+        ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 1.5; ctx.stroke();
+        const r = 10 + 7 * onda;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.strokeStyle = mezclarColor(col, cv.COLOR_FONDO_LIENZO, 0.15 + 0.8 * onda); ctx.lineWidth = 2; ctx.stroke();
+      }
+      return;
+    }
     let caminos = this._guia.caminos || [];
     if (this._cableEnProgreso.length >= 2) {
       const enCurso = { en_curso: { puntos: this._cableEnProgreso } };
@@ -832,21 +1064,12 @@ export class Lienzo {
       ctx.closePath(); ctx.fillStyle = claro; ctx.fill();
     }
     const colMarco = mezclarColor(col, cv.COLOR_FONDO_LIENZO, 0.5 * onda);
-    for (const [tipo, a, b] of this._guia.zonas || []) {
+    for (const [, a, b] of this._guia.zonas || []) {
       const [x1, y1] = this.pixel(a), [x2, y2] = this.pixel(b);
       this._caja(Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2), 14, colMarco, 2, [6, 4], mezclarColor(col, cv.COLOR_FONDO_LIENZO, 0.88));
-      cv.texto(ctx, `Coloca aquí: ${NOMBRE_PIEZA[tipo] || tipo}`, (x1 + x2) / 2, Math.min(y1, y2) - 24, col, cv.fuente(13, true));
     }
     for (const tag of this._guia.tags || []) {
       const b = this.bbox(tag); if (b) this._caja(b[0], b[1], b[2], b[3], 9, colMarco, 2, [6, 4]);
-    }
-    for (const p of this._guia.puntos || []) {
-      const [x, y] = this.pixel(p);
-      ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill();
-      ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 1.5; ctx.stroke();
-      const r = 10 + 7 * onda;
-      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.strokeStyle = mezclarColor(col, cv.COLOR_FONDO_LIENZO, 0.15 + 0.8 * onda); ctx.lineWidth = 2; ctx.stroke();
     }
   }
 }

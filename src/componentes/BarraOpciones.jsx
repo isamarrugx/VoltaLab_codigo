@@ -4,9 +4,10 @@ import { COLORES_CABLE, explicarBandas } from "../lib/cv.js";
 import * as F from "../lib/formato.js";
 import { nombresComponentes } from "../lib/explicador.js";
 import { EJEMPLOS, ORDEN_EJEMPLOS, NOMBRES_CORTOS_EJEMPLOS } from "../datos/ejemplos.js";
+import { TECLA } from "../lienzo/Lienzo.js";
 
 export const INFO = {
-  seleccionar: ["Seleccionar y mover", "Selecciona una pieza para editarla o arrástrala para moverla."],
+  seleccionar: ["Seleccionar y mover", `Clic para elegir una pieza; arrastra el fondo para elegir varias. ${TECLA}+Z deshace, ${TECLA}+C / ${TECLA}+V copia y pega.`],
   cable: ["Cable", "Un clic para empezar y otro en cada doblez. Termina solo al tocar una conexión."],
   resistencia: ["Resistencia", "Se opone al paso de la corriente. Se mide en ohmios (Ω)."],
   bombillo: ["Bombillo", "Convierte energía eléctrica en luz; brilla según la potencia P = V × I."],
@@ -61,6 +62,32 @@ export default function BarraOpciones({ L, herr, ejemplos, cerrarEjemplos, carga
       </div>
     );
   }
+  const historial = (
+    <>
+      <button className="btn sm crema" style={{ minWidth: 34, color: "var(--texto)" }} disabled={!L.puedeDeshacer()} onClick={() => { L.deshacer(); accion(); }} aria-label="Deshacer" title={`Deshacer (${TECLA}+Z)`}>↶</button>
+      <button className="btn sm crema" style={{ minWidth: 34, color: "var(--texto)" }} disabled={!L.puedeRehacer()} onClick={() => { L.rehacer(); accion(); }} aria-label="Rehacer" title={`Rehacer (${TECLA}+Shift+Z)`}>↷</button>
+    </>
+  );
+  const nSel = L.seleccion.size;
+  if (nSel > 1) {
+    return (
+      <div className="barra-opc tarjeta">
+        <IconoCanvas tipo="seleccionar" w={92} h={62} />
+        <div className="cuerpo">
+          <div className="fila-t">
+            <h3>{nSel} elementos</h3><span className="chip">SELECCIÓN</span>
+            <div className="acciones">
+              {historial}
+              <button className="btn sm crema" style={{ minWidth: 86, color: "var(--texto)" }} onClick={() => { L.copiar(); accion(); }} title={`${TECLA}+C`}>Copiar</button>
+              <button className="btn sm crema" style={{ minWidth: 86, color: "var(--texto)" }} onClick={() => { L.duplicar(); accion(); }} title={`${TECLA}+D`}>Duplicar</button>
+              <button className="btn sm crema err" style={{ minWidth: 86 }} onClick={() => { L.eliminarSeleccionado(); accion(); }} title="Supr">Eliminar</button>
+            </div>
+          </div>
+          <div className="desc">Arrastra cualquiera de las piezas para mover todo junto. Shift o {TECLA} + clic suma o quita piezas; Esc deselecciona.</div>
+        </div>
+      </div>
+    );
+  }
   const tag = L.seleccionado;
   const elem = tag != null ? L.elemento(tag) : null;
   const editando = !!elem;
@@ -84,6 +111,7 @@ export default function BarraOpciones({ L, herr, ejemplos, cerrarEjemplos, carga
         <div className="fila-t">
           <h3>{titulo}</h3>{chip ? <span className="chip">{chip}</span> : null}
           <div className="acciones">
+            {historial}
             {tipo !== "seleccionar" ? <button className={`btn sm info ${verInfo ? "on" : ""}`} aria-label="Qué es esto" title="Qué es esto" onClick={() => setVerInfo((v) => !v)}>?</button> : null}
             {editando ? <><button className="btn sm crema err" style={{ minWidth: 86 }} onClick={() => L.eliminarSeleccionado()}>Eliminar</button>
               {tipo !== "cable" ? <button className="btn sm crema" style={{ minWidth: 86, color: "var(--texto)" }} onClick={() => { L.girar(tag); accion(); }}>Girar</button> : null}</> : null}
