@@ -1,0 +1,25 @@
+// Paleta de CircuitLab (port de estilos.py)
+export const COLOR_FONDO = "#F6F1E7";
+export const COLOR_FONDO_TARJETA = "#FCFAF5";
+export const COLOR_ACENTO = "#246B8E";
+export const COLOR_ACENTO_HOVER = "#174B69";
+export const COLOR_ACENTO_SUAVE = "#DEEBF2";
+export const COLOR_CIAN = "#12A4C4";
+export const COLOR_FONDO_HOVER = "#ECE7DC";
+export const COLOR_CREMA_OSCURO = "#D8D0C0";
+export const COLOR_SOMBRA = "#E4DDCF";
+export const COLOR_ELECTRICIDAD = "#F2BD4B";
+export const COLOR_ELECTRICIDAD_OSCURO = "#B7860B";
+export const COLOR_ELECTRICIDAD_SUAVE = "#FDF1C7";
+export const COLOR_EXITO = "#4D876C";
+export const COLOR_EXITO_SUAVE = "#DDF2E7";
+export const COLOR_ERROR = "#D0493F";
+export const COLOR_ERROR_SUAVE = "#F9E0DD";
+export const COLOR_ADVERTENCIA = "#D98A12";
+export const COLOR_ADVERTENCIA_SUAVE = "#FBEBD2";
+export const COLOR_TEXTO_PRINCIPAL = "#243247";
+export const COLOR_TEXTO_SECUNDARIO = "#657184";
+export const COLOR_BORDE_NORMAL = "#E4DCCD";
+export const COLOR_VOLTAJE = "#246B8E";
+export const COLOR_CORRIENTE = "#C98A00";
+export const COLOR_POTENCIA = "#8A5CC7";
