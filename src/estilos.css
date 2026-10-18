@@ -626,7 +626,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .ini-kicker { display: inline-flex; align-items: center; gap: 8px; background: rgba(255,252,246,.78); border: 1px solid rgba(36,93,168,.17); border-radius: 999px; padding: 8px 13px; color: #245DA8; font-size: 10px; font-weight: 850; letter-spacing: 1.25px; }
 .ini-kicker-punto { width: 7px; height: 7px; display: inline-block; border-radius: 50%; background: #F9C74F; box-shadow: 0 0 0 4px rgba(249,199,79,.2); }
 .ini h1 { max-width: 680px; font-size: clamp(43px, 5.3vw, 76px); line-height: .99; letter-spacing: -2.8px; font-weight: 850; margin: 22px 0 22px; }
-.ini h1 em { background: none; color: var(--acento); -webkit-text-fill-color: var(--acento); }
+.ini h1 em { background: linear-gradient(100deg, #F9C74F 0%, #F6B93B 38%, #3B82F6 100%); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
 .rayo { background: linear-gradient(100deg, #172B49 0 35%, #245DA8 45%, #F9C74F 52%, #FFF0C2 55%, #F9C74F 58%, #172B49 68% 100%) 130% 0 / 260% 100% no-repeat; -webkit-background-clip: text; background-clip: text; }
 .ini-copy > p { max-width: 27em; font-size: clamp(17px, 1.45vw, 20px); line-height: 1.58; color: #58677C; }
 .ini-btn { border-radius: 999px; height: 54px; font-size: 15px; letter-spacing: -.1px; }
