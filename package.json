@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "build:single": "vite build -c vite.single.config.js",
-    "test": "node --test src/lib/motor.test.js src/lib/problemas.test.js"
+    "test": "node --test src/lib/motor.test.js src/lib/problemas.test.js src/lib/fallas.test.js src/datos/casos.test.js src/lib/sesion.test.js"
   },
   "dependencies": {
     "react": "18.3.1",

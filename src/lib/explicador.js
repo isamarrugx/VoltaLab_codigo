@@ -3,8 +3,8 @@ import * as F from "./formato.js";
 import { diagnosticar, exportar } from "./diagnostico.js";
 import { resolverCircuito, clasificarTopologia, construirNodos, ErrorCircuito, clave } from "./motor.js";
 
-const PREFIJOS = { resistencia: "R", bombillo: "B", interruptor: "S" };
-export const NOMBRE_TIPO = { resistencia: "resistencia", bombillo: "bombillo", interruptor: "interruptor", bateria: "batería" };
+const PREFIJOS = { resistencia: "R", bombillo: "B", interruptor: "S", fusible: "F" };
+export const NOMBRE_TIPO = { resistencia: "resistencia", bombillo: "bombillo", interruptor: "interruptor", bateria: "batería", fusible: "fusible" };
 
 const ordenTag = (t) => { const n = parseInt(String(t).split("_").pop(), 10); return Number.isNaN(n) ? 0 : n; };
 

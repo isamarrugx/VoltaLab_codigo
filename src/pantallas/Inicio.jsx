@@ -58,7 +58,7 @@ function Experimento({ ir }) {
             <p className={`ini-resp ${acerto ? "ok" : "no"}`}><b>{acerto ? "Exacto." : "Casi."}</b> Un camino abierto interrumpe la corriente en todo el circuito, aunque el corte esté lejos del bombillo.</p>
             <div className="ini-opciones">
               <button className="ini-op" onClick={() => poner(cerrado)}>{cerrado ? "Abrirlo otra vez" : "Cerrarlo"}</button>
-              <button className="ini-op fuerte" onClick={() => ir("Ruta")}>Seguir aprendiendo →</button>
+              <button className="ini-op fuerte" onClick={() => ir("Sesion")}>Jugar una sesión →</button>
             </div>
           </>
         )}
@@ -69,7 +69,8 @@ function Experimento({ ir }) {
 
 export default function Inicio({ ir, progreso }) {
   const nL = progreso ? progreso.aprender.size : 0, nR = progreso ? progreso.laboratorio.size : 0;
-  const empezo = nL > 0;
+  const ses = progreso && progreso.sesiones ? progreso.sesiones : { nivel: 1, jugadas: 0, mejor: {} };
+  const record = Math.max(0, ...Object.values(ses.mejor || {}));
   return (
     <div className="ini">
       <div className="ini-cont">
@@ -92,9 +93,10 @@ export default function Inicio({ ir, progreso }) {
             </span> te conecta con <em>ideas reales.</em></h1>
             <p>Construye circuitos, pon a prueba tus ideas y descubre cómo funciona el mundo que te rodea.</p>
             <div className="ini-cta">
-              <button className="ini-btn prim" onClick={() => ir("Ruta")}>{empezo ? "Continuar explorando" : "Comenzar a explorar"}<span aria-hidden="true">→</span></button>
-              <button className="ini-btn sec" onClick={() => ir("Configurar")}>Probar el simulador</button>
+              <button className="ini-btn prim" onClick={() => ir("Sesion")}>{ses.jugadas ? `Seguir jugando · Nivel ${ses.nivel}` : "Jugar ahora"}<span aria-hidden="true">→</span></button>
+              <button className="ini-btn sec" onClick={() => ir("Ruta")}>Explorar por mi cuenta</button>
             </div>
+            <p className="ini-sub-cta">{ses.jugadas ? `Tu récord: ${record} puntos · ${ses.jugadas} ${ses.jugadas === 1 ? "sesión jugada" : "sesiones jugadas"}` : "4 casos · unos 8 minutos · sin registrarte"}</p>
           </div>
           <Experimento ir={ir} />
         </section>

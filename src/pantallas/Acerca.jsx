@@ -12,11 +12,11 @@ const OBJETIVOS = [
 ];
 
 const PASOS = [
-  ["Empieza por el experimento de la portada", "Predice qué pasa con el bombillo y compruébalo. Es la idea central de todo el proyecto: primero piensas, después mides."],
-  ["Sigue las lecciones guiadas", "Están en orden. Cada una presenta un concepto, te propone experimentos cortos y termina con un reto."],
-  ["Resuelve los retos de laboratorio", "Construye el circuito que se pide. Si te atascas, pide una pista; las estrellas premian resolverlo con menos ayuda."],
-  ["Explora en el simulador libre", "Arma tus propios circuitos o carga uno de los ejemplos para modificarlo."],
-  ["Aplica con los problemas", "Para nivel intermedio y avanzado: escribe tu respuesta en cada paso y revisa el procedimiento completo al final."],
+  ["Juega una sesión", "Desde la portada, pulsa Jugar: cuatro casos de unos dos minutos en el tablero real. Predices qué pasará, reparas un circuito averiado y construyes uno que cumpla una condición."],
+  ["Aprende del resultado", "El simulador decide si tenías razón. Cada caso termina con una explicación corta, el detalle con los cálculos y la idea que te llevas."],
+  ["Sube de nivel", "Al terminar una sesión ves tus puntos, tus estrellas y tus insignias, y se desbloquea el siguiente nivel: primeros circuitos, serie y paralelo, protección."],
+  ["Profundiza a tu ritmo", "En «Explorar por mi cuenta» están las lecciones guiadas y los retos de laboratorio, en orden."],
+  ["Experimenta sin límites", "En el simulador libre puedes armar cualquier circuito, provocar fallas reales y repararlas. Los problemas aplicados son para nivel intermedio y avanzado."],
 ];
 
 const HERRAMIENTAS = [
@@ -25,6 +25,7 @@ const HERRAMIENTAS = [
   ["bombillo", "Bombillo", "Brilla según la potencia que recibe (P = V × I)."],
   ["interruptor", "Interruptor", "Abre o cierra el camino. Con la herramienta Mover, un clic lo alterna."],
   ["cable", "Cable", "Un clic para empezar, otro en cada doblez; termina al tocar una conexión."],
+  ["fusible", "Fusible", "Se funde si pasa más corriente que su valor nominal y protege el circuito."],
 ];
 
 const ATAJOS = [

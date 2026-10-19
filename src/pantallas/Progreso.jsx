@@ -22,7 +22,7 @@ export default function Progreso({ ir, progreso, setProgreso }) {
   const [aviso, setAviso] = useState("");
   const archivo = useRef(null);
   const guardarCopia = () => {
-    const d = { version: 1, aprender: [...progreso.aprender], laboratorio: [...progreso.laboratorio], habilidades: [...progreso.habilidades], problemas: [...progreso.problemas], estrellas: progreso.estrellas, evidencias: progreso.evidencias, nombre: progreso.nombre };
+    const d = { version: 1, aprender: [...progreso.aprender], laboratorio: [...progreso.laboratorio], habilidades: [...progreso.habilidades], problemas: [...progreso.problemas], estrellas: progreso.estrellas, evidencias: progreso.evidencias, nombre: progreso.nombre , sesiones: progreso.sesiones};
     const url = URL.createObjectURL(new Blob([JSON.stringify(d, null, 2)], { type: "application/json" }));
     const a = document.createElement("a"); a.href = url; a.download = `circuitlab_progreso${progreso.nombre ? "_" + progreso.nombre.trim().replace(/\s+/g, "-") : ""}.json`;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -33,7 +33,7 @@ export default function Progreso({ ir, progreso, setProgreso }) {
     f.text().then((t) => {
       const j = JSON.parse(t);
       if (!Array.isArray(j.aprender) || !Array.isArray(j.laboratorio)) throw new Error("formato");
-      setProgreso((p) => ({ ...p, aprender: new Set(j.aprender), laboratorio: new Set(j.laboratorio), habilidades: new Set(j.habilidades || []), problemas: new Set(j.problemas || []), estrellas: j.estrellas || {}, evidencias: j.evidencias || {}, nombre: j.nombre || p.nombre }));
+      setProgreso((p) => ({ ...p, aprender: new Set(j.aprender), laboratorio: new Set(j.laboratorio), habilidades: new Set(j.habilidades || []), problemas: new Set(j.problemas || []), estrellas: j.estrellas || {}, evidencias: j.evidencias || {}, nombre: j.nombre || p.nombre , sesiones: j.sesiones || p.sesiones}));
       setAviso("Progreso cargado.");
     }).catch(() => setAviso("Ese archivo no es una copia de CircuitLab.")).finally(() => { e.target.value = ""; });
   };

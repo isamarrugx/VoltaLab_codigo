@@ -110,7 +110,7 @@ export default function RetoVista({ reto, etiqueta, onVolver, onCompletar, onSig
         {hecho ? <IconoEstado forma="ok" color={E.COLOR_EXITO} tam={22} /> : nivel === 3 ? <IconoEstado forma="neutro" color={E.COLOR_TEXTO_SECUNDARIO} tam={22} /> : <span className="n">{i + 1}</span>}
         <span style={{ flex: 1 }}>{p.texto}</span>
         {actual && nivel === 1 && p.como ? (sabido
-          ? <div className="sabido"><span>Ya sabes hacerlo: sigue la guía del tablero.</span><button className="btn sm discreto" style={{ color: "var(--acento)" }} onClick={() => { s.comoAbierto = true; bump(); }}>¿Cómo era?</button></div>
+          ? <div className="sabido"><span>Ya sabes hacerlo: sigue la guía del tablero.</span><button className="btn sm discreto" onClick={() => { s.comoAbierto = true; bump(); }}>¿Cómo era?</button></div>
           : <div className="como">{p.como}</div>) : null}
       </div>
     );

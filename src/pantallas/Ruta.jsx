@@ -20,6 +20,15 @@ export default function Ruta({ ir, progreso }) {
         </header>
         <section className="ruta-pg">
           <h1 className="ruta-t">Tu ruta de aprendizaje</h1>
+          <button className="ini-card ancha ruta-jugar" onClick={() => ir("Sesion")}>
+            <span className="ini-ico"><IconoCanvas tipo="bombillo" w={84} h={46} /></span>
+            <span className="ini-txt">
+              <span className="ini-verbo">Jugar · 8 minutos</span>
+              <h3>Sesión de laboratorio</h3>
+              <p>Cuatro casos seguidos: predice, repara y construye en el tablero real. Suma puntos y desbloquea niveles.</p>
+            </span>
+            <span className="ini-ir">Jugar<span aria-hidden="true"> →</span></span>
+          </button>
           <div className="ini-grid">
             <button className="ini-card grande" onClick={() => ir("Aprender")}>
               <span className="ini-num">1</span>

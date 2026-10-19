@@ -33,7 +33,7 @@ export default function Galeria({ onElegir, onCerrar, actual }) {
     <div className="galeria tarjeta">
       <div className="gal-cab">
         <div><h3>Circuitos de ejemplo</h3><span>Elige uno para cargarlo en el tablero. Cada ejemplo trae una guía para explicarlo en clase.</span></div>
-        <button className="btn sm crema" style={{ color: "var(--texto)", minWidth: 80 }} onClick={onCerrar}>Cerrar</button>
+        <button className="btn sm" onClick={onCerrar}>Cerrar</button>
       </div>
       <div className="gal-tira">
         {ORDEN_EJEMPLOS.map((k) => {

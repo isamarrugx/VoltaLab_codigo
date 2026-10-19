@@ -183,6 +183,15 @@ export default function LeccionVista({ leccion: lec, etiqueta, onVolver, onCompl
   const ctxAhora = new Contexto(s.med, s.historial);
   const ctrlSel = s.sel ? lec.controles.find((c) => c.tipo !== "conexion" && tagControl(c) === s.sel) : null;
   const compSel = s.sel && L.current ? L.current.componentes[s.sel] : null;
+  // con varias piezas elegidas se comparan sus medidas lado a lado
+  const multiSel = L.current && L.current.seleccion.size > 1 ? [...L.current.seleccion].filter((tg) => L.current.componentes[tg]) : [];
+  const datoPieza = (tg) => {
+    const c = L.current.componentes[tg], d = L.current.datosDe(tg);
+    if (d) return `${F.voltios(d.voltaje)} · ${F.amperios(d.corriente)} · ${F.vatios(d.potencia)}`;
+    if (c.tipo === "bateria") return `${F.gg(c.valor)} V`;
+    if (c.tipo === "interruptor") return c.cerrado ? "cerrado" : "abierto";
+    return "sin corriente";
+  };
 
   const Tabla = () => {
     const filas = [], vistos = new Set();
@@ -284,14 +293,17 @@ export default function LeccionVista({ leccion: lec, etiqueta, onVolver, onCompl
       <div className="cuerpo-lec">
         <div className="col-izq">
           <div className="caja-opc tarjeta">
-            {compSel ? (<>
+            {multiSel.length > 1 ? (<>
+              <span className="tit">{multiSel.length} piezas</span>
+              {(() => { const nombres = nombresComponentes(L.current.componentes); return multiSel.map((tg) => <span key={tg} className="sel-dato"><b>{nombres[tg] || tg}</b>{datoPieza(tg)}</span>); })()}
+            </>) : compSel ? (<>
               <IconoCanvas tipo={compSel.tipo} w={64} h={36} valor={compSel.valor} cerrado={compSel.cerrado} />
               <span className="tit">{compSel.tipo === "bateria" ? "Batería" : compSel.tipo === "interruptor" ? "Interruptor" : compSel.tipo === "bombillo" ? "Bombillo" : "Resistencia"}</span>
               {ctrlSel ? opcionesControl(ctrlSel).map(([v, tx]) => {
                 const actual = valorControl(ctrlSel); const on = typeof v === "number" ? Math.abs(actual - v) < 1e-9 : actual === v;
                 return <button key={String(v)} className={`btn opt ${on ? "on" : ""}`} onClick={() => aplicar(ctrlSel, v)}>{tx}</button>; })
                 : <span style={{ color: "var(--texto2)" }}>En esta lección esta pieza no se cambia.</span>}
-            </>) : <span style={{ color: "var(--texto2)" }}>Toca una pieza del tablero para ver sus opciones.</span>}
+            </>) : <span style={{ color: "var(--texto2)" }}>Toca una pieza para ver sus opciones, o arrastra un recuadro para comparar varias.</span>}
           </div>
           <LienzoVista opciones={{ editable: false, modoEducativo: true }} onListo={alListo} onCambio={alCambiar} onSeleccion={(tg) => { s.sel = tg; bump(); }} />
           <div className={`controles-lec tarjeta ${pulsar ? "pulso" : ""}`} key={pulsar ? `p${s.i}` : "q"}>
