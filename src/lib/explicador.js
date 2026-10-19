@@ -27,6 +27,7 @@ export function componentesDesdeDefinicion(def) {
   for (const [a, b, v] of def.resistencias || []) componentes[tag()] = { tipo: "resistencia", punto_a: a, punto_b: b, valor: v };
   for (const [a, b, v] of def.bombillos || []) componentes[tag()] = { tipo: "bombillo", punto_a: a, punto_b: b, valor: v, brillo: null };
   for (const [a, b, c] of def.interruptores || []) componentes[tag()] = { tipo: "interruptor", punto_a: a, punto_b: b, cerrado: c };
+  for (const [a, b, v] of def.fusibles || []) componentes[tag()] = { tipo: "fusible", punto_a: a, punto_b: b, valor: v };
   for (const [a, b] of def.cables || []) cables[tag()] = { puntos: [a, b], color: "#4B625F" };
   return { componentes, cables };
 }

@@ -9,6 +9,9 @@ import { mezclarColor } from "../lib/animaciones.js";
 import { analizar, nombresComponentes } from "../lib/explicador.js";
 import { Contexto, limitesDef, soluciones, yaLoSabes } from "../datos/lecciones.js";
 import { teoriaDe } from "../datos/teoria.js";
+import PorDentro from "../componentes/PorDentro.jsx";
+import { Simulacion } from "../lib/simulacion.js";
+import { ESPEC } from "../lib/fallas.js";
 
 const TIPOS = {
   idea: ["IDEA", E.COLOR_ACENTO, E.COLOR_ACENTO_SUAVE],
@@ -53,7 +56,8 @@ function Medidor({ clave, med, resaltar }) {
 export default function LeccionVista({ leccion: lec, etiqueta, onVolver, onCompletar, onSiguiente, onReiniciar, haySiguiente }) {
   const [, bump] = useReducer((x) => x + 1, 0);
   const L = useRef(null);
-  const S = useRef({ i: 0, terminada: false, med: null, historial: [], estado: lec.tarjetas.map(() => ({})), conexion: lec.controles.find((c) => c.tipo === "conexion")?.opciones[0][0] ?? null, cargando: false, tocado: false, pistaVisual: null, leyendo: false, sel: null });
+  const S = useRef({ i: 0, terminada: false, med: null, historial: [], estado: lec.tarjetas.map(() => ({})), conexion: lec.controles.find((c) => c.tipo === "conexion")?.opciones[0][0] ?? null, cargando: false, tocado: false, pistaVisual: null, leyendo: false, sel: null, fallas: [], vioCorto: false });
+  const sim = useRef(null);
   const s = S.current;
   const tarjetas = lec.tarjetas;
   const bloquesTeoria = teoriaDe(lec.clave);
@@ -62,11 +66,19 @@ export default function LeccionVista({ leccion: lec, etiqueta, onVolver, onCompl
 
   const encuadre = (def) => { const [f0, f1, c0, c1] = limitesDef(def); return [f0 - 1, f1 + 1, c0, c1]; };
   const nombres = () => { const l = L.current; l.mostrarNombres(nombresComponentes(l.componentes)); };
+  // Contexto de las metas, con lo que pasó físicamente (fallas, cortocircuito) y las piezas actuales.
+  const nuevoCtx = () => {
+    const ctx = new Contexto(s.med, s.historial);
+    ctx.fallas = s.fallas; ctx.vioCorto = s.vioCorto;
+    ctx.pieza = (tipo) => { const l = L.current; const tg = l && l.tagsPorTipo(tipo)[0]; return tg ? l.componentes[tg] : null; };
+    return ctx;
+  };
   const tagControl = (c) => { const [tipo, idx] = c.componente; const tags = L.current.tagsPorTipo(tipo); return idx < tags.length ? tags[idx] : null; };
   const valorControl = (c) => {
     if (c.tipo === "conexion") return s.conexion;
     const comp = L.current?.componentes[tagControl(c)];
     if (!comp) return null;
+    if (c.tipo === "limite") return comp[ESPEC[comp.tipo].campo] ?? ESPEC[comp.tipo].def;
     return c.tipo === "interruptor" ? comp.cerrado : comp.valor;
   };
   const opcionesControl = (c) => c.tipo === "interruptor" ? [[true, "Cerrado"], [false, "Abierto"]] : c.tipo === "conexion" ? c.opciones.map(([k, tx]) => [k, tx]) : c.opciones.map((x) => [x, F.fmtValor(x, c.unidad)]);
@@ -75,14 +87,15 @@ export default function LeccionVista({ leccion: lec, etiqueta, onVolver, onCompl
     const l = L.current;
     const { med } = analizar(l.componentes, l.cables);
     s.med = med;
-    if (med && !med.abierto) l.mostrarResultados(med.resultado, med.tagsR);
+    if (sim.current) sim.current.recalcular(); // con fallas: incluye el límite de la batería
+    else if (med && !med.abierto) l.mostrarResultados(med.resultado, med.tagsR);
   };
   const guiaReto = () => {
     const l = L.current; if (!l) return;
     const t0 = tarjetas[s.i], st0 = s.estado[s.i];
     const vistas = st0.pistas || 0;
     if (s.terminada || t0.tipo !== "reto" || st0.hecha || !vistas) { s.pistaVisual = null; l.limpiarGuia(); return; }
-    const ctx = new Contexto(s.med, s.historial);
+    const ctx = nuevoCtx();
     const ctrls = Object.fromEntries(lec.controles.map((c) => [c.id, c]));
     let sol = null;
     for (const so of soluciones(t0)) {
@@ -100,7 +113,7 @@ export default function LeccionVista({ leccion: lec, etiqueta, onVolver, onCompl
     if (s.terminada) return;
     const t0 = tarjetas[s.i], st0 = s.estado[s.i];
     if (t0.tipo === "explora" || t0.tipo === "reto") {
-      const ctx = new Contexto(s.med, s.historial);
+      const ctx = nuevoCtx();
       if (!st0.hecha) {
         let ok = false;
         try { ok = !!t0.meta(ctx); } catch { ok = false; }
@@ -130,6 +143,11 @@ export default function LeccionVista({ leccion: lec, etiqueta, onVolver, onCompl
   };
   const alListo = (l) => {
     L.current = l;
+    if (lec.fallas) {
+      // lección con fallas reales: las piezas se calientan y pueden fundirse según el cálculo
+      sim.current = new Simulacion(l, { onFalla: (f) => { s.fallas.push(f); } });
+      sim.current.encendida = true;
+    }
     s.cargando = true; l.cargarEjemplo(lec.circuito); s.cargando = false;
     nombres(); l.encuadrar(encuadre(lec.circuito)); refrescar();
     irA(0);
@@ -145,8 +163,23 @@ export default function LeccionVista({ leccion: lec, etiqueta, onVolver, onCompl
       return;
     }
     const tag = tagControl(c); if (!tag) return;
-    if (c.tipo === "interruptor") l.establecerInterruptor(tag, v); else l.establecerValor(tag, v);
+    if (c.tipo === "interruptor") l.establecerInterruptor(tag, v);
+    else if (c.tipo === "limite") l.establecerEspec(tag, v);
+    else l.establecerValor(tag, v);
   };
+
+  // Bucle físico de las lecciones con fallas (10 veces por segundo).
+  useEffect(() => {
+    if (!lec.fallas) return undefined;
+    let ult = performance.now();
+    const id = setInterval(() => {
+      if (!sim.current) return;
+      const ahora = performance.now(), r = sim.current.paso(Math.min(0.25, (ahora - ult) / 1000)); ult = ahora;
+      if (r && r.med.corto && !s.vioCorto) { s.vioCorto = true; evaluar(); }
+    }, 100);
+    return () => clearInterval(id);
+    // eslint-disable-next-line
+  }, []);
 
   const hecha = (k = s.i) => ["idea", "resumen"].includes(tarjetas[k].tipo) || !!s.estado[k].hecha;
   const seguir = () => {
@@ -180,7 +213,18 @@ export default function LeccionVista({ leccion: lec, etiqueta, onVolver, onCompl
       </div>
     );
   };
-  const ctxAhora = new Contexto(s.med, s.historial);
+  const ctxAhora = nuevoCtx();
+  // Datos reales para el panel «Por dentro».
+  const datosPorDentro = () => {
+    const m = s.med, l = L.current;
+    if (lec.porDentro === "filamento") {
+      const tg = l && l.tagsPorTipo("bombillo")[0], comp = tg && l.componentes[tg], d = m && m.componentes.B1;
+      return { P: d && !m.abierto ? d.P : 0, pmax: lec.fallas && comp ? comp.pmax || 15 : null, danado: !!(comp && comp.danado), abierto: !m || m.abierto };
+    }
+    if (!m) return { V: 0, I: 0, R: Infinity, P: 0, abierto: true };
+    return { V: m.V, I: m.abierto ? 0 : m.I, R: m.Req, P: m.abierto ? 0 : m.P, abierto: m.abierto };
+  };
+  const hayDanos = !!(L.current && L.current.hayDanados());
   const ctrlSel = s.sel ? lec.controles.find((c) => c.tipo !== "conexion" && tagControl(c) === s.sel) : null;
   const compSel = s.sel && L.current ? L.current.componentes[s.sel] : null;
   // con varias piezas elegidas se comparan sus medidas lado a lado
@@ -305,9 +349,12 @@ export default function LeccionVista({ leccion: lec, etiqueta, onVolver, onCompl
                 : <span style={{ color: "var(--texto2)" }}>En esta lección esta pieza no se cambia.</span>}
             </>) : <span style={{ color: "var(--texto2)" }}>Toca una pieza para ver sus opciones, o arrastra un recuadro para comparar varias.</span>}
           </div>
-          <LienzoVista opciones={{ editable: false, modoEducativo: true }} onListo={alListo} onCambio={alCambiar} onSeleccion={(tg) => { s.sel = tg; bump(); }} />
+          <LienzoVista opciones={{ editable: false, modoEducativo: true }} onListo={alListo} onCambio={alCambiar} onSeleccion={(tg) => { s.sel = tg; bump(); }}>
+            {lec.porDentro ? <PorDentro tipo={lec.porDentro} datos={datosPorDentro()} /> : null}
+          </LienzoVista>
           <div className={`controles-lec tarjeta ${pulsar ? "pulso" : ""}`} key={pulsar ? `p${s.i}` : "q"}>
-            <div className="fila-ctrl">{lec.controles.map(grupoControl)}</div>
+            <div className="fila-ctrl">{lec.controles.map(grupoControl)}
+              {hayDanos ? <button className="btn sm prim" onClick={() => L.current.repararTodo()}>Reemplazar lo dañado</button> : null}</div>
             <div className="sep" />
             <div className="medidores">{(lec.medidor || ["V", "I", "R"]).map((k) => <Medidor key={k} clave={k} med={s.med} resaltar={!s.terminada && t.resaltar === k} />)}</div>
             <div className="formula-viva"><em>EN VIVO</em><span>{(() => { try { return s.med ? lec.formula(s.med) : ""; } catch { return ""; } })()}</span></div>

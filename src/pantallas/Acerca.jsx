@@ -12,11 +12,11 @@ const OBJETIVOS = [
 ];
 
 const PASOS = [
-  ["Juega una sesión", "Desde la portada, pulsa Jugar: cuatro casos de unos dos minutos en el tablero real. Predices qué pasará, reparas un circuito averiado y construyes uno que cumpla una condición."],
-  ["Aprende del resultado", "El simulador decide si tenías razón. Cada caso termina con una explicación corta, el detalle con los cálculos y la idea que te llevas."],
-  ["Sube de nivel", "Al terminar una sesión ves tus puntos, tus estrellas y tus insignias, y se desbloquea el siguiente nivel: primeros circuitos, serie y paralelo, protección."],
-  ["Profundiza a tu ritmo", "En «Explorar por mi cuenta» están las lecciones guiadas y los retos de laboratorio, en orden."],
-  ["Experimenta sin límites", "En el simulador libre puedes armar cualquier circuito, provocar fallas reales y repararlas. Los problemas aplicados son para nivel intermedio y avanzado."],
+  ["Prueba el experimento de la portada", "Un bombillo de 5 W conectado a 12 V: predice qué pasará y compruébalo. Es la idea de todo VOLTA: primero piensas, después ves qué pasa y entiendes por qué."],
+  ["Aprende paso a paso", "Las lecciones están en orden: cada una presenta una idea, te pide experimentar con el circuito y termina con un reto y una pregunta. El panel «Por dentro» muestra lo que no se ve: el agua en los tubos, los electrones, el filamento."],
+  ["Quema y repara", "En «Cuando algo se quema» y «Cortocircuitos y fusibles» las piezas fallan según los cálculos reales: descubres por qué se dañan y cómo evitarlo."],
+  ["Practica con los retos", "Construye el circuito que se pide. Si te atascas, pide una pista; las estrellas premian resolverlo con menos ayuda."],
+  ["Experimenta en el laboratorio libre", "Arma cualquier circuito y ponlo al límite: los bombillos se funden, las resistencias se queman, los fusibles se abren y la batería se protege."],
 ];
 
 const HERRAMIENTAS = [

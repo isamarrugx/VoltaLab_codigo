@@ -1043,5 +1043,58 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 @media (prefers-reduced-motion: reduce) { .ses-pts, .ses-pulso { animation: none; } }
 .ini-copy > p.ini-sub-cta { margin: 14px 0 0; font-size: 14px; line-height: 1.4; color: var(--texto2); }
-.ruta-jugar { margin-bottom: 16px; width: 100%; background: linear-gradient(110deg, #FFF6DA, #FFFCF6 70%); border-color: #F0DCA4; }
-.ruta-jugar .ini-ir { margin: 0; flex: none; }
+.ini .ruta-sub { margin: -14px 0 26px; font-size: 17px; line-height: 1.5; color: var(--texto2); max-width: 40em; }
+.ruta-pg .ini-grid { grid-template-columns: 1.4fr 1fr 1fr; }
+
+/* ---------- «Por dentro»: animación del concepto sobre el tablero ---------- */
+.por-dentro { position: absolute; right: 10px; bottom: 10px; z-index: 3; background: rgba(255,252,246,.96); border: 1px solid rgba(23,43,73,.14); border-radius: 14px; box-shadow: 0 3px 0 rgba(214,199,174,.6), 0 12px 28px rgba(23,43,73,.10); overflow: hidden; }
+.zona-lienzo .por-dentro canvas { position: static; display: block; } /* no hereda el lienzo a pantalla completa */
+.por-dentro .pd-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border: 0; background: #EAF1FA; padding: 6px 12px; font: 800 11px var(--fuente); letter-spacing: .6px; text-transform: uppercase; color: #245DA8; cursor: pointer; }
+.por-dentro .pd-cab i { font-style: normal; font-size: 15px; }
+.por-dentro.cerrado .pd-cab { background: transparent; }
+@media (max-width: 700px) { .por-dentro canvas { width: 240px !important; height: 134px !important; } }
+
+/* ---------- Problemas: guía de conceptos ---------- */
+.pb-aviso { margin-top: 18px; padding: 16px 20px; border-radius: 14px; background: var(--adv-suave); border: 1px solid #F0C98A; display: grid; gap: 6px; }
+.pb-aviso .pb-nivel { justify-self: start; }
+.pb-aviso p { margin: 0; font-size: 14px; line-height: 1.55; color: #6B4A0B; }
+.pb-grupo-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.pb-grupo-cab h2 { margin: 0; }
+.pb-usa { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #A9BED8; background: #EAF1FA; color: #245DA8; font: 700 12px var(--fuente); padding: 5px 12px; border-radius: 999px; cursor: pointer; margin-bottom: 8px; }
+.pb-usa:hover { background: #DCE8F7; border-color: #245DA8; }
+.pb-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.pb-explica { padding: 10px 12px; border-radius: 10px; background: var(--fondo); border-left: 3px solid var(--elec); color: var(--texto) !important; }
+.pb-intro h2 { margin-bottom: 6px; }
+.pb-intro > .btn { margin-top: 6px; }
+.pb-concepto { padding: 14px 0; border-top: 1px solid var(--borde); }
+.pb-concepto h3 { margin: 0 0 6px; font-size: 17px; letter-spacing: -.2px; }
+.pb-concepto p { margin: 0 0 8px; font-size: 14px; line-height: 1.55; color: var(--texto2); }
+.pb-formula { display: inline-block; margin: 2px 0 8px; padding: 8px 14px; border-radius: 10px; background: var(--acento-suave); color: var(--acento); font-weight: 800; font-size: 15px; }
+.pb-simbolos { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 2px; font-size: 13px; color: var(--texto2); }
+.pb-simbolos b { display: inline-block; min-width: 22px; color: var(--texto); }
+.pb-ejemplo { padding: 10px 12px; border-radius: 10px; background: var(--fondo); border: 1px solid var(--borde); }
+.pb-ejemplo span { font-size: 11px; font-weight: 850; letter-spacing: 1px; text-transform: uppercase; color: var(--elec-oscuro); }
+.pb-ejemplo p { margin: 4px 0 0 !important; color: var(--texto) !important; }
+.pb-ejemplo p.f { font-weight: 800; color: var(--acento) !important; }
+.pb-guia-fondo { position: fixed; inset: 0; z-index: 40; background: rgba(23,43,73,.28); display: flex; justify-content: flex-end; animation: entra .18s ease-out; }
+.pb-guia { width: min(480px, 100%); height: 100%; overflow-y: auto; background: var(--tarjeta); box-shadow: -10px 0 40px rgba(23,43,73,.18); padding: 0 20px 24px; }
+.pb-guia-cab { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0 12px; background: var(--tarjeta); border-bottom: 1px solid var(--borde); margin-bottom: 6px; }
+.pb-guia-cab small { display: block; font-size: 10px; font-weight: 850; letter-spacing: 1.2px; color: var(--acento); }
+.pb-guia-cab b { font-size: 18px; }
+.pb-guia-item { border-bottom: 1px solid var(--borde); scroll-margin-top: 70px; }
+.pb-guia-item summary { cursor: pointer; padding: 12px 0; font-weight: 800; font-size: 15px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pb-guia-item summary code { font: 700 12px var(--fuente); color: var(--acento); background: var(--acento-suave); padding: 2px 8px; border-radius: 999px; }
+.pb-guia-item.foco { background: linear-gradient(90deg, rgba(249,199,79,.14), transparent); margin: 0 -20px; padding: 0 20px; }
+.pb-guia-item .pb-concepto { border-top: 0; padding-top: 0; }
+.pb-nivel-t { vertical-align: middle; margin-left: 8px; font-size: 12px; letter-spacing: 0; }
+.ruta-nivel { margin-left: 6px; font-size: 10px; letter-spacing: .3px; padding: 2px 8px; text-transform: none; }
+/* reducción del circuito, etapa por etapa */
+.red { margin: 4px 0 12px; }
+.red-t { font-size: 11px; font-weight: 850; letter-spacing: 1px; text-transform: uppercase; color: var(--acento); margin-bottom: 6px; }
+.red-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.red-paso { display: flex; align-items: center; gap: 6px; }
+.red-flecha { font-size: 20px; font-weight: 800; color: var(--acento); }
+.red-etapa { margin: 0; padding: 8px 10px 6px; background: #fff; border: 1px solid var(--borde); border-radius: 12px; display: flex; flex-direction: column; align-items: center; animation: entra .3s ease-out both; }
+.red-paso:nth-child(2) .red-etapa { animation-delay: .25s; } .red-paso:nth-child(3) .red-etapa { animation-delay: .5s; }
+.red-etapa figcaption { margin-top: 2px; max-width: 240px; text-align: center; font-size: 12px; line-height: 1.35; color: var(--texto2); }
+@media (prefers-reduced-motion: reduce) { .red-etapa { animation: none; } }

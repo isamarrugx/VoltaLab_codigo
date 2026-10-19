@@ -39,7 +39,7 @@ export function desplazar(def, filas, cols) {
 }
 export function limitesDef(def) {
   let pts = def.bateria ? [def.bateria[0], def.bateria[1]] : [];
-  for (const k of ["resistencias", "bombillos", "interruptores"]) for (const [a, b] of def[k] || []) pts.push(a, b);
+  for (const k of ["resistencias", "bombillos", "interruptores", "fusibles"]) for (const [a, b] of def[k] || []) pts.push(a, b);
   for (const [a, b] of def.cables || []) pts.push(a, b);
   if (!pts.length) return [4, 4, 6, 6];
   const fs = pts.map((p) => p[0]), cs = pts.map((p) => p[1]);
@@ -95,12 +95,14 @@ const fPotencia = (m) => { const b = c(m, "B1"); return `P = V × I  =  ${VV(b.V
 const fSP = (m) => { const b1 = c(m, "B1"), b2 = c(m, "B2"); const n = m.tipo === "serie" ? "Serie" : "Paralelo"; return `${n}:  B1 recibe ${VV(b1.V)} → ${W(b1.P)}     B2 recibe ${VV(b2.V)} → ${W(b2.P)}`; };
 
 // ---------- controles ----------
+// Pone potencia máxima al primer bombillo de una definición (4.º dato, ver Lienzo.cargarEjemplo).
+const conLimite = (def, pmax) => ({ ...def, bombillos: def.bombillos.map((b, i) => (i === 0 ? [...b, pmax] : b)) });
 const ctrlBateria = (opciones) => ({ id: "v", tipo: "valor", etiqueta: "Batería", componente: ["bateria", 0], opciones, unidad: "V" });
 const ctrlR = (n, opciones, tipo = "resistencia", prefijo = "R") => ({ id: `${prefijo.toLowerCase()}${n}`, tipo: "valor", etiqueta: `${prefijo}${n}`, componente: [tipo, n - 1], opciones, unidad: "Ω" });
 
 export const LECCIONES = [
   {
-    clave: "resistencia", titulo: "El circuito y la resistencia", icono: "resistencia",
+    clave: "resistencia", porDentro: "agua", titulo: "El circuito y la resistencia", icono: "resistencia",
     resumen: "Batería + resistencia: el circuito más simple.",
     circuito: circuitoSimple(9, "resistencia", 100),
     controles: [ctrlR(1, [50, 100, 200, 300, 470, 1000])],
@@ -146,7 +148,7 @@ export const LECCIONES = [
     ],
   },
   {
-    clave: "voltaje", titulo: "Voltaje", icono: "bateria", resumen: "El empuje que da la batería.",
+    clave: "voltaje", porDentro: "agua", titulo: "Voltaje", icono: "bateria", resumen: "El empuje que da la batería.",
     circuito: circuitoSimple(4.5, "resistencia", 100),
     controles: [ctrlBateria([1.5, 3, 4.5, 6, 9, 12])],
     medidor: ["V", "I", "R"], formula: fOhm,
@@ -180,7 +182,7 @@ export const LECCIONES = [
     ],
   },
   {
-    clave: "corriente", titulo: "Corriente", icono: "cable", resumen: "La carga que circula: ¿se gasta por el camino?",
+    clave: "corriente", porDentro: "electrones", titulo: "Corriente", icono: "cable", resumen: "La carga que circula: ¿se gasta por el camino?",
     circuito: circuitoSerie(9, "resistencia", 100, 200),
     controles: [ctrlR(1, [100, 200, 300]), ctrlR(2, [100, 200, 300])],
     medidor: ["V", "I", "R"],
@@ -211,7 +213,7 @@ export const LECCIONES = [
     ],
   },
   {
-    clave: "circuito", titulo: "El interruptor", icono: "interruptor", resumen: "Abrir y cerrar el camino de la corriente.",
+    clave: "circuito", porDentro: "agua", titulo: "El interruptor", icono: "interruptor", resumen: "Abrir y cerrar el camino de la corriente.",
     circuito: circuitoSimple(9, "bombillo", 10, true),
     controles: [{ id: "s1", tipo: "interruptor", etiqueta: "Interruptor S1", componente: ["interruptor", 0] }],
     medidor: ["V", "I", "R"], formula: fCircuito,
@@ -242,7 +244,7 @@ export const LECCIONES = [
     ],
   },
   {
-    clave: "ohm", titulo: "Ley de Ohm", icono: "resistencia", resumen: "I = V / R: la relación que une todo.",
+    clave: "ohm", porDentro: "agua", titulo: "Ley de Ohm", icono: "resistencia", resumen: "I = V / R: la relación que une todo.",
     circuito: circuitoSimple(6, "resistencia", 100),
     controles: [ctrlBateria([3, 6, 9, 12]), ctrlR(1, [100, 200, 300])],
     medidor: ["V", "I", "R"], formula: fOhm,
@@ -338,7 +340,7 @@ export const LECCIONES = [
     ],
   },
   {
-    clave: "potencia", titulo: "Potencia eléctrica", icono: "bombillo", resumen: "La energía por segundo: el brillo.",
+    clave: "potencia", porDentro: "filamento", titulo: "Potencia eléctrica", icono: "bombillo", resumen: "La energía por segundo: el brillo.",
     circuito: circuitoSimple(6, "bombillo", 10),
     controles: [ctrlBateria([3, 6, 9, 12]), ctrlR(1, [5, 10, 22, 47], "bombillo", "B")],
     medidor: ["V", "I", "P"], formula: fPotencia,
@@ -370,6 +372,41 @@ export const LECCIONES = [
     ],
   },
   {
+    clave: "limites", titulo: "Cuando algo se quema", icono: "bombillo", resumen: "Cada pieza aguanta una potencia máxima.",
+    fallas: true, porDentro: "filamento",
+    circuito: conLimite(circuitoSimple(6, "bombillo", 10), 5),
+    controles: [ctrlBateria([3, 6, 9, 12]), { id: "pmax", tipo: "limite", etiqueta: "B1 soporta", componente: ["bombillo", 0], opciones: [5, 15, 40], unidad: "W" }],
+    medidor: ["V", "I", "P"], formula: fPotencia,
+    tarjetas: [
+      { tipo: "idea", titulo: "Todo tiene un límite",
+        texto: "Un bombillo convierte la energía eléctrica en luz, pero también en CALOR. Cada bombillo indica cuánta potencia aguanta: su POTENCIA MÁXIMA. Este bombillo, B1, soporta 5 W.\n\nMientras reciba menos de 5 W, brilla sin problema. Si recibe más, su filamento se calienta por encima de lo que resiste y se corta: decimos que se FUNDIÓ.\n\nAhora, con 6 V, recibe P = 6² / 10 = 3.6 W: está por debajo de su límite.",
+        fijate: ["Mira el panel «Por dentro»: el color del filamento indica qué tan caliente está.", "La barra compara la potencia que recibe con la que soporta."],
+        analogia: "Como el motor de un carro: puede acelerar mucho, pero si lo fuerzas más allá de la línea roja se recalienta y se daña." },
+      { tipo: "explora", titulo: "Ponlo al límite",
+        texto: "Antes de tocar nada, predice: ¿con cuántos voltios recibirá B1 más de 5 W? Después sube el voltaje de la batería hasta que B1 se funda.",
+        meta: (ctx) => ctx.fallas.some((f) => f.tipo === "bombillo"),
+        progreso: () => "Sube el voltaje de la batería",
+        descubre: (ctx) => { const f = ctx.fallas.find((x) => x.tipo === "bombillo");
+          return `Se fundió al recibir ${+f.P.toPrecision(3)} W, más de los 5 W que soporta. Con 9 V recibe 9² / 10 = 8.1 W y con 12 V, 14.4 W. El límite se pasa alrededor de los 7 V (7² / 10 = 4.9 W). Fíjate en los medidores: un bombillo fundido queda ABIERTO, así que la corriente cayó a 0.`; },
+        resaltar: "P" },
+      { tipo: "idea", titulo: "¿Qué pasó por dentro?",
+        texto: "La potencia crece con el CUADRADO del voltaje: al pasar de 6 V a 12 V, el voltaje se duplica pero la potencia se multiplica por 4. Por eso un bombillo puede estar tranquilo y, con un pequeño aumento, fundirse.\n\nAl fundirse, el filamento se corta en dos. El camino de la corriente queda abierto, igual que si abrieras un interruptor.",
+        formula: "P = V² / R",
+        simbolos: [["P", "potencia que recibe (W)"], ["V", "voltaje en el bombillo (V)"], ["R", "resistencia del bombillo (Ω)"]],
+        ejemplo: { enunciado: "¿Se funde un bombillo de 10 Ω y 5 W conectado a 9 V?", pasos: ["P = V² / R = 9² / 10 = 81 / 10 = 8.1 W.", "8.1 W es más que los 5 W que soporta.", "Sí se funde: necesita un bombillo de al menos 8.1 W o un voltaje menor."] } },
+      { tipo: "explora", titulo: "Repáralo de verdad",
+        texto: "Pon la batería en 12 V y logra que B1 encienda sin fundirse. Ojo: si solo lo reemplazas, se fundirá otra vez. Elige un bombillo que soporte más (control «B1 soporta») y pulsa «Reemplazar lo dañado».",
+        meta: (ctx) => { const b = ctx.pieza("bombillo"), d = ctx.med && ctx.med.componentes.B1;
+          return !!(b && !b.danado && ctx.ahora({ V: 12 }) && d && d.P > 1 && (b.pmax || 15) >= d.P); },
+        progreso: (ctx) => { const b = ctx.pieza("bombillo"); return !b ? "" : b.danado ? "B1 está fundido: elige su potencia y reemplázalo" : !ctx.ahora({ V: 12 }) ? "Pon la batería en 12 V" : "Elige un bombillo que soporte la potencia que recibe"; },
+        descubre: (ctx) => `Con 12 V el bombillo recibe ${+ctx.med.componentes.B1.P.toPrecision(3)} W, y ahora soporta ${ctx.pieza("bombillo").pmax} W: brilla sin peligro. Reparar no es solo cambiar la pieza: hay que cambiar lo que la dañó. Por eso los aparatos indican su voltaje y su potencia.`,
+        resaltar: "P" },
+      { tipo: "pregunta", texto: "Un bombillo de 10 Ω soporta 5 W. ¿Con qué batería se funde?",
+        opciones: [["3", "Con 3 V", "Con 3 V recibe 3² / 10 = 0.9 W: muy por debajo de 5 W."], ["6", "Con 6 V", "Con 6 V recibe 3.6 W: todavía no llega a 5 W."], ["9", "Con 9 V", "Correcto: 9² / 10 = 8.1 W, más de los 5 W que soporta."]], correcta: "9" },
+      { tipo: "resumen", puntos: ["Cada pieza tiene una potencia máxima: si la supera, se daña.", "La potencia crece con el cuadrado del voltaje: P = V² / R.", "Una pieza fundida deja el circuito abierto; antes de reemplazarla, corrige la causa."], formula: "P = V² / R  ≤  P máx" },
+    ],
+  },
+  {
     clave: "serie_paralelo", titulo: "Serie vs. paralelo", icono: "bombillo", resumen: "Los mismos bombillos, dos conexiones.",
     circuito: circuitoSerie(12, "bombillo", 10, 10),
     controles: [{ id: "conexion", tipo: "conexion", etiqueta: "Conexión",
@@ -394,6 +431,39 @@ export const LECCIONES = [
       { tipo: "pregunta", texto: "¿Por qué las instalaciones de las casas se hacen en paralelo?",
         opciones: [["ok", "Cada aparato recibe el voltaje completo y funciona aunque otro se apague", "Correcto: cada rama es independiente y recibe todo el voltaje."], ["cable", "Porque usa menos cable", "En realidad suele usar más cable. La razón es otra: piensa qué pasa al apagar una lámpara."], ["menos", "Porque así circula menos corriente", "Al contrario: en paralelo la batería (o la red) entrega más corriente."]], correcta: "ok" },
       { tipo: "resumen", puntos: ["En serie los bombillos se reparten el voltaje y brillan menos.", "En paralelo cada uno recibe el voltaje completo y brilla más.", "En paralelo, si uno se apaga, los demás siguen funcionando."], formula: "P = V² / R" },
+    ],
+  },
+  {
+    clave: "proteccion", titulo: "Cortocircuitos y fusibles", icono: "cable", resumen: "Un atajo peligroso y la pieza que lo detiene.",
+    fallas: true,
+    circuito: { bateria: [[2, 2], [6, 2], 12, 3], resistencias: [], bombillos: [[[2, 12], [6, 12], 10, 15]], interruptores: [[[2, 7], [4, 7], false]], fusibles: [[[4, 7], [6, 7], 0.5]], cables: [[[2, 2], [2, 12]], [[6, 12], [6, 2]]] },
+    controles: [{ id: "atajo", tipo: "interruptor", etiqueta: "Atajo", componente: ["interruptor", 0] }, { id: "f1", tipo: "valor", etiqueta: "Fusible F1", componente: ["fusible", 0], opciones: [0.5, 1, 2, 5], unidad: "A" }],
+    medidor: ["V", "I", "P"], formula: fOhm,
+    tarjetas: [
+      { tipo: "idea", titulo: "Un atajo peligroso",
+        texto: "Un CORTOCIRCUITO ocurre cuando la corriente encuentra un camino casi sin resistencia entre el + y el −: un atajo. Por la ley de Ohm, I = V / R: si R es casi cero, la corriente se dispara.\n\nEn el tablero, B1 está encendido. En el medio hay un atajo con un interruptor (abierto) y un FUSIBLE de 0.5 A: un hilo fino que se funde si la corriente supera su valor.",
+        fijate: ["Por B1 pasan 1.2 A.", "La batería entrega como máximo 3 A.", "El atajo todavía está abierto."],
+        analogia: "Como un río que encuentra una bajada directa: casi toda el agua se va por ahí y deja seco el camino largo." },
+      { tipo: "explora", titulo: "Cierra el atajo",
+        texto: "Cierra el atajo (control «Atajo» o haz clic sobre el interruptor) y observa qué pasa con el fusible y con B1.",
+        meta: (ctx) => ctx.fallas.some((f) => f.tipo === "fusible"),
+        descubre: (ctx) => { const f = ctx.fallas.find((x) => x.tipo === "fusible");
+          return `El fusible se abrió en una fracción de segundo: por el atajo pasaban ${A(f.I)} y solo soporta ${A(f.limite)}. Al abrirse, el atajo desapareció y B1 volvió a encender. El fusible se sacrificó para proteger el resto del circuito.`; } },
+      { tipo: "explora", titulo: "¿Y sin protección?",
+        texto: "Cambia el fusible por uno de 5 A (más de lo que la batería puede dar: es como no tener fusible), pulsa «Reemplazar lo dañado» y deja el atajo cerrado.",
+        meta: (ctx) => ctx.vioCorto && ctx.pieza("fusible") && ctx.pieza("fusible").valor >= 5,
+        progreso: (ctx) => { const f = ctx.pieza("fusible"); return !f ? "" : f.valor < 5 ? "Elige el fusible de 5 A" : f.danado ? "Pulsa «Reemplazar lo dañado»" : "Cierra el atajo"; },
+        descubre: "Sin un fusible adecuado, nada corta el atajo: la batería entrega su máximo (3 A) por ahí, su voltaje cae casi a 0 V y B1 se apaga. Las chispas muestran por dónde pasa esa corriente. En una casa, ese calor podría quemar los cables: por eso existen los fusibles y los breakers." },
+      { tipo: "reto", titulo: "Reto: el fusible justo",
+        texto: "Abre el atajo y elige el fusible MÁS PEQUEÑO que deje a B1 encendido sin abrirse.",
+        meta: (ctx) => { const f = ctx.pieza("fusible"), s = ctx.pieza("interruptor");
+          return !!(f && s && !s.cerrado && !f.danado && f.valor === 2 && ctx.med && ctx.med.componentes.B1 && ctx.med.componentes.B1.P > 1); },
+        pistas: ["¿Cuánta corriente necesita B1? I = 12 V / 10 Ω.", "B1 necesita 1.2 A: los fusibles de 0.5 A y 1 A se abrirían.", "El de 2 A: aguanta 1.2 A y, si alguien cierra el atajo, se abre."],
+        solucion: { f1: 2 },
+        logro: "Con 2 A el fusible deja pasar los 1.2 A de B1, pero ante un cortocircuito (3 A) se abre en poco más de un segundo. Así se elige un fusible: un poco por encima de la corriente normal, nunca muy por encima." },
+      { tipo: "pregunta", texto: "¿Cómo se conecta un fusible para que proteja un circuito?",
+        opciones: [["serie", "En serie, para que toda la corriente pase por él", "Correcto: si toda la corriente lo atraviesa, al abrirse corta el circuito entero."], ["paralelo", "En paralelo con la carga", "En paralelo la corriente lo esquivaría… o peor, el propio fusible sería un cortocircuito."], ["igual", "Da igual dónde esté", "No da igual: solo protege lo que está en serie con él."]], correcta: "serie" },
+      { tipo: "resumen", puntos: ["Un cortocircuito es un camino casi sin resistencia: la corriente se dispara.", "El fusible va en serie y se abre si la corriente supera su valor.", "Se elige un poco por encima de la corriente normal del circuito."], formula: "I = V / R" },
     ],
   },
 ];

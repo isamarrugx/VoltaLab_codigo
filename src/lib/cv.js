@@ -266,7 +266,12 @@ export function dibujarInterruptor(ctx, x1, y1, x2, y2, cerrado, seleccionada = 
   linea(ctx, ca[0], ca[1], punta[0], punta[1], colorEstado, grosor, "round");
   ovalo(ctx, ca[0], ca[1], radio, radio, colorEstado);
   if (conEtiqueta) {
-    texto(ctx, cerrado ? "Cerrado" : "Abierto", mx - px * (sa + 12) + ux * 14, my - py * (sa + 12) + uy * 14, colorEstado, fuente(12, true));
+    const t = cerrado ? "Cerrado" : "Abierto";
+    if (Math.abs(px) > 0.7) {
+      // de pie: el texto va al costado, del lado opuesto a la palanca, sin tapar la caja
+      const lado = -px > 0 ? 1 : -1;
+      texto(ctx, t, mx + lado * (sa + 8), my, colorEstado, fuente(12, true), lado > 0 ? "left" : "right");
+    } else texto(ctx, t, mx - px * (sa + 12) + ux * 14, my - py * (sa + 12) + uy * 14, colorEstado, fuente(12, true));
   }
 }
 

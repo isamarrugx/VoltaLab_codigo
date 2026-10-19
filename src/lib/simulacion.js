@@ -43,7 +43,8 @@ export class Simulacion {
       const pts = (d.estado === "corto" ? d.tags : []).flatMap((t) => (l.cables[t] ? l.cables[t].puntos : [])).map((p) => l.pixel(p));
       l.chispas(pts.sort(() => Math.random() - 0.5).slice(0, 3));
     }
-    if (falla) { l.marcarDanado(falla.tag); if (this.onFalla) this.onFalla(falla); }
+    // primero se avisa (quien escucha ya sabe de la falla cuando el tablero se recalcula)
+    if (falla) { if (this.onFalla) this.onFalla(falla); l.marcarDanado(falla.tag); }
     return { med, falla };
   }
 }
