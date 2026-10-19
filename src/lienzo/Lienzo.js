@@ -2,16 +2,18 @@
 import { mezclarColor, suavizar, movimientoReducido } from "../lib/animaciones.js";
 import * as cv from "../lib/cv.js";
 import * as E from "../lib/estilos.js";
-import { dividirEnUniones, clave } from "../lib/motor.js";
+import { dividirEnUniones, clave, puntosInteriores } from "../lib/motor.js";
 import { calcularTrayectos } from "../lib/flujo.js";
 import { sinTramosTapados } from "../lib/guias.js";
+import { ESPEC } from "../lib/fallas.js";
 
 export const ESPACIADO = 40;
-const VALORES_DEFECTO = { resistencia: 100, bombillo: 10, bateria: 12 };
+const VALORES_DEFECTO = { resistencia: 100, bombillo: 10, bateria: 12, fusible: 0.5 };
+const PIEZAS = ["resistencia", "bombillo", "interruptor", "bateria", "fusible"];
 const P_MIN = 0.001, P_MAX = 20, BRILLO_MIN = 0.12;
 const SEPARACION = 24, RADIO_PART = 2.6, V_MIN = 18, V_MAX = 130, CONST_BRILLO = 0.16;
 const SUAVE = { velocidad: 0.55, separacion: 36, radio: 2.0, ping: 0.6, periodo_resaltado: 2.8, constante_brillo: 0.3 };
-const NOMBRE_PIEZA = { resistencia: "resistencia", bombillo: "bombillo", interruptor: "interruptor", bateria: "batería" };
+const NOMBRE_PIEZA = { resistencia: "resistencia", bombillo: "bombillo", interruptor: "interruptor", bateria: "batería", fusible: "fusible" };
 
 export function brilloPara(p) {
   if (p <= 0) return 0;
@@ -69,6 +71,10 @@ export class Lienzo {
     this.permitirInterruptores = true;
     this.herramienta = "seleccionar";
     this.valoresNuevos = { ...VALORES_DEFECTO };
+    // límites de las piezas nuevas (potencia máxima, corriente máxima de la batería)
+    this.especNuevas = Object.fromEntries(Object.entries(ESPEC).map(([t, e]) => [t, e.def]));
+    // estado físico que calcula el simulador: calor de cada pieza y lo que hace la batería
+    this.calor = {}; this.fuente = null;
     this.componentes = {}; this.cables = {};
     this._sig = 0;
     this.seleccionado = null;   // la pieza seleccionada cuando hay exactamente una
@@ -117,7 +123,9 @@ export class Lienzo {
   _hayAnimacion() {
     if (this._efectos.length || this._bombillosEnTransicion()) return true;
     if (movimientoReducido()) return false;
-    return this._trayectos.length > 0 || this._resaltado !== null || !!this._guia;
+    // una pieza sobrecargada parpadea o humea: hay que seguir dibujando
+    const caliente = Object.entries(this.calor).some(([t, k]) => k > 0.85 && this.componentes[t] && !this.componentes[t].danado);
+    return this._trayectos.length > 0 || this._resaltado !== null || !!this._guia || caliente;
   }
   _cuadro() {
     this._raf = null;
@@ -251,6 +259,7 @@ export class Lienzo {
     const base = { tipo, punto_a: [f, c], punto_b: this._puntoB(tipo, [f, c]) };
     if (tipo === "interruptor") base.cerrado = true;
     else base.valor = this.valoresNuevos[tipo];
+    if (ESPEC[tipo]) base[ESPEC[tipo].campo] = this.especNuevas[tipo];
     if (tipo === "bombillo") base.brillo = null;
     this.componentes[tag] = base;
     this._notificarCambio();
@@ -263,9 +272,12 @@ export class Lienzo {
     const vertical = (tipo === "bateria") !== !!this.girarNuevo;
     return vertical ? [f + 2, c] : [f, c + 2];
   }
+  // ¿Se puede terminar un cable aquí? En un borne, en un extremo o doblez de otro cable,
+  // o en medio de un tramo de cable (el motor lo toma como una unión).
   _hayTerminal(p) {
     return Object.values(this.componentes).some((k) => eq(k.punto_a, p) || eq(k.punto_b, p))
-      || Object.values(this.cables).some((k) => k.puntos.some((q) => eq(q, p)));
+      || Object.values(this.cables).some((k) => k.puntos.some((q) => eq(q, p))
+        || k.puntos.some((q, i) => i > 0 && puntosInteriores(k.puntos[i - 1], q).some((m) => eq(m, p))));
   }
   _terminarCable(pts) {
     this._cableEnProgreso = [];
@@ -306,7 +318,7 @@ export class Lienzo {
     this._escuchas = Object.entries(manejadores);
     for (const [t, f] of this._escuchas) cv_.addEventListener(t, f, { passive: t !== "wheel" });
     // Los atajos del tablero editable funcionan aunque el foco esté en un botón del panel.
-    this._destinoTeclado = this.editable ? window : cv_;
+    this._destinoTeclado = this.estatico ? cv_ : window;
     this._escuchasTeclado = [["keydown", (e) => this._alTecla(e)], ["keyup", (e) => this._alSoltarTecla(e)]];
     for (const [t, f] of this._escuchasTeclado) this._destinoTeclado.addEventListener(t, f);
     cv_.tabIndex = 0; cv_.style.outline = "none"; cv_.style.touchAction = this.estatico ? "pan-y" : "none";
@@ -316,13 +328,16 @@ export class Lienzo {
     if (t && t !== this.canvas && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
     const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
     if (e.key === " ") {
-      if (!this.editable || this.estatico || !this._mouse || mod || (t !== this.canvas && t !== document.body)) return;
+      if (this.estatico || !this._mouse || mod || (t !== this.canvas && t !== document.body)) return;
       e.preventDefault();
       if (!this._espacio) { this._espacio = true; if (!this._pan) this.canvas.style.cursor = "grab"; }
       return;
     }
     if (mod) {
-      if (!this.editable) return;
+      if (!this.editable) {
+        if (k === "a" && t === this.canvas) { e.preventDefault(); this._fijarSeleccion(Object.keys(this.componentes)); }
+        return;
+      }
       const textoMarcado = String(window.getSelection ? window.getSelection() : "") !== "";
       if (k === "z") { e.preventDefault(); if (e.shiftKey) this.rehacer(); else this.deshacer(); }
       else if (k === "y") { e.preventDefault(); this.rehacer(); }
@@ -332,7 +347,7 @@ export class Lienzo {
       else if (k === "d" && this.seleccion.size) { e.preventDefault(); this.duplicar(); }
       return;
     }
-    if (e.key === "Delete" || e.key === "Backspace") { if (this.seleccion.size) { this.eliminarSeleccionado(); e.preventDefault(); } }
+    if (e.key === "Delete" || e.key === "Backspace") { if (this.editable && this.seleccion.size) { this.eliminarSeleccionado(); e.preventDefault(); } }
     else if (e.key === "Escape") this._cancelarODeseleccionar();
     else if (k === "r") {
       const c = this.componentes[this.seleccionado];
@@ -356,8 +371,22 @@ export class Lienzo {
     const punto = this.punto(x, y);
     this._pan = null;
     if (!this.editable) {
+      if (this._panForzado && !this.estatico) { this._pan = [x, y]; this.canvas.style.cursor = "grabbing"; return; }
       const tag = this.tagEn(x, y);
       const comp = this.componentes[tag];
+      // en las lecciones solo se eligen piezas (no cables): recuadro y Shift/Ctrl + clic como en el simulador
+      if (!this.estatico && !comp && !this._tactil) {
+        this._marco = { x0: x, y0: y, x1: x, y1: y, base: this._mod ? [...this.seleccion] : [] };
+        if (!this._mod) this.cambiarSeleccion(null);
+        this.pedir();
+        return;
+      }
+      if (comp && this._mod && !this.estatico) {
+        const sel = new Set(this.seleccion);
+        if (sel.has(tag)) sel.delete(tag); else sel.add(tag);
+        this._fijarSeleccion([...sel]);
+        return;
+      }
       if (comp && comp.tipo === "interruptor") {
         if (this.permitirInterruptores) this.establecerInterruptor(tag, !comp.cerrado);
         else {
@@ -370,7 +399,7 @@ export class Lienzo {
       return;
     }
     if (this._panForzado && !this.estatico) { this._pan = [x, y]; this.canvas.style.cursor = "grabbing"; return; }
-    if (["resistencia", "bombillo", "interruptor", "bateria"].includes(this.herramienta)) {
+    if (PIEZAS.includes(this.herramienta)) {
       this._colocar(this.herramienta, punto); return;
     }
     if (this.herramienta === "cable") {
@@ -426,7 +455,7 @@ export class Lienzo {
     }
     if ((this.herramienta === "cable" && this._cableEnProgreso.length) || this._esPieza(this.herramienta)) this.pedir();
   }
-  _esPieza(h) { return ["resistencia", "bombillo", "interruptor", "bateria"].includes(h); }
+  _esPieza(h) { return PIEZAS.includes(h); }
   _alSoltar() {
     if (this._pan) { this._pan = null; this.canvas.style.cursor = this._espacio ? "grab" : this._cursor; this.pedir(); }
     if (this._marco) { this._marco = null; this.pedir(); }
@@ -466,6 +495,7 @@ export class Lienzo {
       const [x1, y1] = this.pixel(c.punto_a), [x2, y2] = this.pixel(c.punto_b);
       if (segEnRect(x1, y1, x2, y2, r)) dentro.push(t);
     }
+    if (!this.editable) return dentro;
     for (const [t, k] of Object.entries(this.cables)) {
       const p = k.puntos.map((q) => this.pixel(q));
       for (let i = 0; i + 1 < p.length; i++) if (segEnRect(...p[i], ...p[i + 1], r)) { dentro.push(t); break; }
@@ -592,11 +622,114 @@ export class Lienzo {
     const resistencias = [], tagsR = [];
     let bateria = null;
     for (const [tag, c] of Object.entries(this.componentes)) {
+      if (c.danado) continue; // fundida, quemada o abierta: ya no conduce
       if (c.tipo === "resistencia" || c.tipo === "bombillo") { resistencias.push([c.punto_a, c.punto_b, c.valor]); tagsR.push(tag); }
-      else if (c.tipo === "interruptor" && c.cerrado) cables.push([c.punto_a, c.punto_b]);
+      else if ((c.tipo === "interruptor" && c.cerrado) || c.tipo === "fusible") cables.push([c.punto_a, c.punto_b]);
       else if (c.tipo === "bateria") bateria = [c.punto_a, c.punto_b, c.valor];
     }
     return { cables, resistencias, bateria, tagsR };
+  }
+
+  // ---------- fallas ----------
+  // `calor`: tag -> θ (o avance de fusión del fusible); `fuente`: medición física (fallas.medir).
+  fijarTermico(calor, fuente) {
+    this.calor = calor || {}; this.fuente = fuente || null;
+    // una resistencia sobrecalentada echa hilos de humo antes de quemarse
+    const ahora = performance.now() / 1000;
+    this._humoT = this._humoT || {};
+    for (const [tag, k] of Object.entries(this.calor)) {
+      const c = this.componentes[tag];
+      if (!c || c.danado || c.tipo !== "resistencia" || k < 0.85 || ahora - (this._humoT[tag] || 0) < 0.55) continue;
+      this._humoT[tag] = ahora;
+      const g = this._geom(c);
+      this._efecto("humo", [g.mx + (Math.random() - 0.5) * 14, g.my - 6], 1.6, { suave: true });
+    }
+    // cortocircuito: el aviso aparece una vez cada vez que empieza
+    const corto = !!(fuente && fuente.corto);
+    if (corto && !this._enCorto) {
+      const bat = Object.values(this.componentes).find((c) => c.tipo === "bateria");
+      if (bat) { const g = this._geom(bat); this.sacudir(4, 0.35); this._efecto("onda", [g.mx, g.my], 0.5, { radio: 50 }); this._efecto("texto", [g.mx + 40, g.my - 34], 1.6, { texto: "¡CORTOCIRCUITO!", color: E.COLOR_ERROR }); this._efecto("arco", [g.x1, g.y1], 0.7, { hasta: [g.x2, g.y2] }); }
+    }
+    this._enCorto = corto;
+    this.pedir();
+  }
+  hayDanados() { return Object.values(this.componentes).some((c) => c.danado); }
+  marcarDanado(tag) {
+    const c = this.componentes[tag]; if (!c || c.danado) return;
+    c.danado = true;
+    const g = this._geom(c), centro = [g.mx, g.my], arriba = [g.mx, g.my - 30];
+    if (c.tipo === "bombillo") {
+      // estalla: destello, vidrios que salen volando, chispas y una nube de humo
+      c.brillo = null; this._brilloObjetivo[tag] = 0;
+      this._efecto("destello", centro, 0.6, { grande: true });
+      this._efecto("onda", centro, 0.55, { radio: 80 });
+      this._efecto("chispero", centro, 1.1, { n: 18 });
+      this._efecto("vidrios", centro, 1.1);
+      this.sacudir(6, 0.4);
+      this._efecto("chispa", centro, 0.55); this._efecto("chispa", centro, 0.75);
+      this._efecto("humo", [g.mx, g.my - 8], 2.2);
+      this._efecto("texto", arriba, 1.5, { texto: "¡FUNDIDO!", color: E.COLOR_ERROR });
+    } else if (c.tipo === "resistencia") {
+      // se quema: llama corta, humo espeso y chispas
+      this._efecto("llama", centro, 1.6);
+      this._efecto("chispero", centro, 0.9, { n: 10 });
+      this.sacudir(3, 0.3);
+      this._efecto("humo", [g.mx - 6, g.my - 6], 2.4); this._efecto("humo", [g.mx + 6, g.my - 4], 2.6);
+      this._efecto("chispa", centro, 0.6);
+      this._efecto("texto", arriba, 1.5, { texto: "¡QUEMADA!", color: E.COLOR_ERROR });
+    } else if (c.tipo === "fusible") {
+      // el hilo se abre con un arco brillante
+      this._efecto("destello", centro, 0.35);
+      this._efecto("onda", centro, 0.4, { radio: 40 });
+      this._efecto("chispero", centro, 0.8, { n: 12 });
+      this.sacudir(3, 0.25);
+      this._efecto("arco", [g.mx - g.ux * 8, g.my - g.uy * 8], 0.45, { hasta: [g.mx + g.ux * 8, g.my + g.uy * 8] });
+      this._efecto("chispa", centro, 0.5);
+      this._efecto("texto", arriba, 1.5, { texto: "¡FUSIBLE ABIERTO!", color: E.COLOR_ADVERTENCIA });
+    } else this._efecto("chispa", centro, 0.5);
+    this._pingComponente(tag, E.COLOR_ERROR);
+    this._notificarCambio();
+  }
+  reparar(tag) {
+    const c = this.componentes[tag]; if (!c || !c.danado) return;
+    delete c.danado; delete this.calor[tag];
+    this._pingComponente(tag, E.COLOR_EXITO);
+    this._notificarCambio();
+  }
+  repararTodo() {
+    const tags = Object.keys(this.componentes).filter((t) => this.componentes[t].danado);
+    if (!tags.length) return;
+    for (const t of tags) { delete this.componentes[t].danado; delete this.calor[t]; }
+    this.iluminar(tags, E.COLOR_EXITO);
+    this._notificarCambio();
+  }
+  establecerEspec(tag, v) {
+    const c = this.componentes[tag], e = c && ESPEC[c.tipo]; if (!e) return;
+    c[e.campo] = v; this._notificarCambio();
+  }
+  // Chispas en un punto (en píxeles): solo se piden cuando el modelo indica un cortocircuito o una falla.
+  chispas(puntos) {
+    for (const p of puntos) { this._efecto("chispa", p, 0.4); if (Math.random() < 0.5) this._efecto("chispero", p, 0.7, { n: 6 }); }
+  }
+  sacudir(fuerza = 5, dur = 0.35) {
+    if (movimientoReducido()) return;
+    if (this.estatico) fuerza = Math.min(fuerza, 3); // en la portada, más discreto
+    this._sacudida = { inicio: performance.now() / 1000, dur, fuerza }; this.pedir();
+  }
+  _efecto(tipo, centro, duracion, extra = {}) {
+    // con movimiento reducido solo quedan el destello y el letrero (informan sin moverse)
+    if (movimientoReducido() && tipo !== "destello" && tipo !== "texto") return;
+    const e = { tipo, centro, duracion, inicio: performance.now() / 1000, semilla: Math.random() * 1000, ...extra };
+    if (tipo === "chispero") e.trozos = Array.from({ length: extra.n || 16 }, () => {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.6, v = 90 + Math.random() * 170;
+      return { vx: Math.cos(a) * v, vy: Math.sin(a) * v, largo: 5 + Math.random() * 7 };
+    });
+    if (tipo === "vidrios") e.trozos = Array.from({ length: 11 }, (_, i) => {
+      const a = (i / 11) * Math.PI * 2 + Math.random() * 0.5, v = 70 + Math.random() * 90;
+      return { vx: Math.cos(a) * v, vy: Math.sin(a) * v - 60, giro: (Math.random() - 0.5) * 14, t: 3 + Math.random() * 4 };
+    });
+    this._efectos.push(e);
+    this.pedir();
   }
   mostrarResultados(resultado, tagsR, animarCorriente = true) {
     this._ultimoResultado = [resultado, [...tagsR]];
@@ -628,13 +761,27 @@ export class Lienzo {
     this.componentes = {}; this.cables = {}; this._ultimoResultado = null; this._brilloObjetivo = {};
     this._fases = {}; this._resaltado = null; this._guia = null; this._sig = 0;
     this.cambiarSeleccion(null);
-    if (def.bateria) { const [a, b, v] = def.bateria; this.componentes[this._nuevoTag()] = { tipo: "bateria", punto_a: a, punto_b: b, valor: v }; }
+    if (def.bateria) { const [a, b, v, imax] = def.bateria; this.componentes[this._nuevoTag()] = { tipo: "bateria", punto_a: a, punto_b: b, valor: v, ...(imax ? { imax } : {}) }; }
     for (const [a, b, v] of def.resistencias || []) this.componentes[this._nuevoTag()] = { tipo: "resistencia", punto_a: a, punto_b: b, valor: v };
-    for (const [a, b, v] of def.bombillos || []) this.componentes[this._nuevoTag()] = { tipo: "bombillo", punto_a: a, punto_b: b, valor: v, brillo: null };
+    // un 4.º dato opcional en bombillos/resistencias es su potencia máxima; en la batería, su corriente máxima
+    for (const [a, b, v, pmax] of def.bombillos || []) this.componentes[this._nuevoTag()] = { tipo: "bombillo", punto_a: a, punto_b: b, valor: v, brillo: null, ...(pmax ? { pmax } : {}) };
     for (const [a, b, c] of def.interruptores || []) this.componentes[this._nuevoTag()] = { tipo: "interruptor", punto_a: a, punto_b: b, cerrado: c };
+    for (const [a, b, v] of def.fusibles || []) this.componentes[this._nuevoTag()] = { tipo: "fusible", punto_a: a, punto_b: b, valor: v };
     for (const [a, b] of def.cables || []) this.cables[this._nuevoTag()] = { puntos: [a, b], color: cv.COLOR_CABLE_DEFECTO };
     this._notificarCambio();
     this.reiniciarHistorial(); // deshacer no regresa a lo que había antes de cargar el circuito
+  }
+  // Cambia el circuito desde fuera (la acción de un caso: cerrar un interruptor, subir el voltaje…).
+  aplicar(fn) { fn(this.componentes, this.cables); this._notificarCambio(); }
+  // Carga piezas ya armadas (con sus límites y estados), por ejemplo un reto.
+  cargarPiezas(componentes, cables) {
+    this.componentes = clonar(componentes); this.cables = clonar(cables);
+    for (const c of Object.values(this.componentes)) if (c.tipo === "bombillo") c.brillo = null;
+    this._ultimoResultado = null; this._brilloObjetivo = {}; this._fases = {}; this._resaltado = null; this._guia = null; this.calor = {};
+    this._sig = Math.max(0, ...[...Object.keys(this.componentes), ...Object.keys(this.cables)].map((t) => parseInt(t.split("_").pop(), 10) || 0));
+    this.cambiarSeleccion(null);
+    this._notificarCambio();
+    this.reiniciarHistorial();
   }
   tagsPorTipo(tipo) {
     const n = (t) => parseInt(t.split("_").pop(), 10) || 0;
@@ -798,14 +945,28 @@ export class Lienzo {
   _dibujar(ahora) {
     const ctx = this.ctx;
     const z = this._z, wA = this.ancho / z, wH = this.alto / z;
-    ctx.setTransform(this._dpr * z, 0, 0, this._dpr * z, 0, 0);
-    ctx.fillStyle = cv.COLOR_FONDO_LIENZO; ctx.fillRect(0, 0, wA, wH);
+    // sacudida breve cuando algo estalla (se desvanece en pocas décimas)
+    let dx = 0, dy = 0;
+    const sac = this._sacudida;
+    if (sac) {
+      const t = (ahora - sac.inicio) / sac.dur;
+      if (t >= 1) this._sacudida = null;
+      else { const f = sac.fuerza * (1 - t) ** 2; dx = Math.sin(ahora * 90) * f; dy = Math.cos(ahora * 77) * f; }
+    }
+    ctx.setTransform(this._dpr * z, 0, 0, this._dpr * z, dx * this._dpr, dy * this._dpr);
+    ctx.fillStyle = cv.COLOR_FONDO_LIENZO; ctx.fillRect(-20, -20, wA + 40, wH + 40);
     cv.dibujarGrid(ctx, wA, wH, ESPACIADO, this._origen);
     // resplandor de bombillos
     for (const c of Object.values(this.componentes)) {
       if (c.tipo !== "bombillo" || !c.brillo) continue;
       const [x1, y1] = this.pixel(c.punto_a), [x2, y2] = this.pixel(c.punto_b);
       cv.dibujarResplandor(ctx, x1, y1, x2, y2, c.brillo);
+    }
+    // halo de calor de las resistencias que se están calentando
+    for (const [tag, c] of Object.entries(this.componentes)) {
+      if (c.tipo !== "resistencia" || c.danado || !(this.calor[tag] > 0.55)) continue;
+      const [x1, y1] = this.pixel(c.punto_a), [x2, y2] = this.pixel(c.punto_b);
+      cv.dibujarCalor(ctx, x1, y1, x2, y2, this.calor[tag]);
     }
     this._dibujarGuiaFondo();
     this._dibujarGuia(false); // caminos y recuadros por debajo: los cables quedan encima
@@ -845,10 +1006,26 @@ export class Lienzo {
     const ctx = this.ctx;
     const [x1, y1] = this.pixel(c.punto_a), [x2, y2] = this.pixel(c.punto_b);
     const sel = this.seleccion.has(tag);
-    if (c.tipo === "resistencia") cv.dibujarResistencia(ctx, x1, y1, x2, y2, c.valor, sel);
-    else if (c.tipo === "bombillo") cv.dibujarBombillo(ctx, x1, y1, x2, y2, c.valor, c.brillo, sel);
+    const fis = { calor: this.calor[tag] || 0, danado: !!c.danado };
+    if (c.tipo === "resistencia") cv.dibujarResistencia(ctx, x1, y1, x2, y2, c.valor, sel, true, fis);
+    else if (c.tipo === "bombillo") {
+      // por encima de su potencia máxima el filamento titila, a punto de cortarse
+      const titila = fis.calor > 1 && c.brillo && !movimientoReducido() ? Math.min(1, c.brillo * (0.8 + 0.4 * Math.random())) : c.brillo;
+      cv.dibujarBombillo(ctx, x1, y1, x2, y2, c.valor, titila, sel, true, fis);
+    }
     else if (c.tipo === "interruptor") cv.dibujarInterruptor(ctx, x1, y1, x2, y2, c.cerrado, sel);
-    else cv.dibujarBateria(ctx, x1, y1, x2, y2, c.valor, sel);
+    else if (c.tipo === "fusible") cv.dibujarFusible(ctx, x1, y1, x2, y2, c.valor, sel, true, fis);
+    else {
+      cv.dibujarBateria(ctx, x1, y1, x2, y2, c.valor, sel);
+      const f = this.fuente;
+      if (f && f.limitando) {
+        // la batería avisa cuando limita su corriente o entra en protección
+        const g = this._geom(c);
+        const t = f.corto ? "PROTECCIÓN · 0 V" : `LIMITA A ${+f.imax.toPrecision(3)} A · ${f.vSalida.toFixed(1)} V`;
+        const col = f.corto ? E.COLOR_ERROR : E.COLOR_ADVERTENCIA;
+        this._cajaTexto(t, g.mx - g.px * 30 + 4, g.my - g.py * 30 + 20, { fuente: cv.fuente(11, true), color: col, relleno: E.COLOR_FONDO_TARJETA, borde: col, ancla: "left" });
+      }
+    }
   }
   // La pieza que se va a colocar, semitransparente, en el punto de la cuadrícula bajo el mouse.
   _dibujarFantasma() {
@@ -862,6 +1039,7 @@ export class Lienzo {
     if (tipo === "resistencia") cv.dibujarResistencia(ctx, x1, y1, x2, y2, v, false, false);
     else if (tipo === "bombillo") cv.dibujarBombillo(ctx, x1, y1, x2, y2, v, null, false, false);
     else if (tipo === "interruptor") cv.dibujarInterruptor(ctx, x1, y1, x2, y2, true, false, false);
+    else if (tipo === "fusible") cv.dibujarFusible(ctx, x1, y1, x2, y2, v, false, false);
     else cv.dibujarBateria(ctx, x1, y1, x2, y2, v, false, false);
     ctx.globalAlpha = 1;
     for (const [x, y] of [[x1, y1], [x2, y2]]) { ctx.beginPath(); ctx.arc(x, y, 4, 0, 6.2832); ctx.fillStyle = invalido ? E.COLOR_ERROR : E.COLOR_ACENTO; ctx.fill(); }
@@ -968,7 +1146,89 @@ export class Lienzo {
     const ctx = this.ctx;
     for (const e of this._efectos) {
       const t = Math.min(1, (ahora - e.inicio) / e.duracion);
-      if (e.tipo === "ping") {
+      if (e.tipo === "chispa") {
+        // rayos cortos amarillos que salen del punto y se apagan
+        const n = 7;
+        for (let i = 0; i < n; i++) {
+          const ang = e.semilla + i * (Math.PI * 2 / n) + Math.sin(e.semilla + i) * 0.5;
+          const r0 = 3 + 10 * t, r1 = r0 + 6 + 5 * Math.abs(Math.sin(e.semilla * 3 + i)) * (1 - t);
+          ctx.beginPath(); ctx.moveTo(e.centro[0] + Math.cos(ang) * r0, e.centro[1] + Math.sin(ang) * r0);
+          ctx.lineTo(e.centro[0] + Math.cos(ang) * r1, e.centro[1] + Math.sin(ang) * r1);
+          ctx.strokeStyle = mezclarColor(i % 2 ? "#FFF3B0" : "#FFB020", cv.COLOR_FONDO_LIENZO, t); ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.stroke();
+        }
+        if (t < 0.4) { ctx.beginPath(); ctx.arc(e.centro[0], e.centro[1], 4 * (1 - t), 0, Math.PI * 2); ctx.fillStyle = "#FFFBEA"; ctx.fill(); }
+      } else if (e.tipo === "humo") {
+        const n = e.suave ? 2 : 4, alfa = e.suave ? 0.22 : 0.4;
+        for (let i = 0; i < n; i++) {
+          const ti = Math.min(1, Math.max(0, t * 1.4 - i * 0.16));
+          if (ti <= 0 || ti >= 1) continue;
+          ctx.beginPath(); ctx.arc(e.centro[0] + Math.sin(e.semilla + i * 2 + ti * 3) * 8, e.centro[1] - 8 - 46 * ti, (e.suave ? 3 : 5) + (e.suave ? 6 : 12) * ti, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(90,84,78,${alfa * (1 - ti)})`; ctx.fill();
+        }
+      } else if (e.tipo === "destello") {
+        const r = e.grande ? 20 + 46 * suavizar(t) : 14 + 22 * suavizar(t);
+        const gr = ctx.createRadialGradient(e.centro[0], e.centro[1], 0, e.centro[0], e.centro[1], r);
+        gr.addColorStop(0, `rgba(255,255,255,${0.95 * (1 - t)})`); gr.addColorStop(0.45, `rgba(255,236,150,${0.7 * (1 - t)})`); gr.addColorStop(1, "rgba(255,236,150,0)");
+        ctx.beginPath(); ctx.arc(e.centro[0], e.centro[1], r, 0, Math.PI * 2); ctx.fillStyle = gr; ctx.fill();
+      } else if (e.tipo === "chispero") {
+        // chispas que saltan y caen con gravedad, dejando una estela
+        const s = t * e.duracion;
+        for (const k of e.trozos) {
+          const x = e.centro[0] + k.vx * s, y = e.centro[1] + k.vy * s + 300 * s * s;
+          const vx = k.vx, vy = k.vy + 600 * s, v = Math.hypot(vx, vy) || 1;
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - (vx / v) * k.largo, y - (vy / v) * k.largo);
+          ctx.strokeStyle = mezclarColor(t < 0.5 ? "#FFF6C2" : "#FFB020", "#E0631A", t); ctx.globalAlpha = 1 - t * t;
+          ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.stroke(); ctx.globalAlpha = 1;
+        }
+      } else if (e.tipo === "onda") {
+        // onda expansiva: un anillo que crece y se desvanece
+        const r = 10 + (e.radio || 70) * suavizar(t);
+        ctx.beginPath(); ctx.arc(e.centro[0], e.centro[1], r, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,214,120,${0.8 * (1 - t)})`; ctx.lineWidth = 6 * (1 - t) + 1; ctx.stroke();
+        ctx.beginPath(); ctx.arc(e.centro[0], e.centro[1], r * 0.7, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,255,255,${0.6 * (1 - t)})`; ctx.lineWidth = 2; ctx.stroke();
+      } else if (e.tipo === "vidrios") {
+        // trozos de vidrio con gravedad, girando y desvaneciéndose
+        const s = t * e.duracion;
+        for (const k of e.trozos) {
+          const x = e.centro[0] + k.vx * s, y = e.centro[1] + k.vy * s + 260 * s * s;
+          ctx.save(); ctx.translate(x, y); ctx.rotate(k.giro * s);
+          ctx.globalAlpha = 1 - t;
+          ctx.beginPath(); ctx.moveTo(-k.t, -k.t * 0.4); ctx.lineTo(k.t, -k.t * 0.7); ctx.lineTo(k.t * 0.3, k.t); ctx.closePath();
+          ctx.fillStyle = "rgba(225,236,244,.95)"; ctx.fill(); ctx.strokeStyle = "rgba(120,140,160,.8)"; ctx.lineWidth = 0.8; ctx.stroke();
+          ctx.restore();
+        }
+      } else if (e.tipo === "llama") {
+        // lenguas de fuego que suben y se apagan
+        const vida = 1 - t;
+        for (let i = 0; i < 5; i++) {
+          const fase = e.semilla + i * 1.7 + t * 18;
+          const h = (16 + 10 * Math.sin(fase)) * vida, w = 6 + 2 * Math.sin(fase * 1.3);
+          const x = e.centro[0] + (i - 2) * 6, y = e.centro[1] - 4;
+          const gr = ctx.createLinearGradient(x, y, x, y - h);
+          gr.addColorStop(0, `rgba(255,120,30,${0.9 * vida})`); gr.addColorStop(0.6, `rgba(255,200,60,${0.75 * vida})`); gr.addColorStop(1, "rgba(255,240,180,0)");
+          ctx.beginPath(); ctx.moveTo(x - w / 2, y); ctx.quadraticCurveTo(x - w, y - h * 0.5, x, y - h); ctx.quadraticCurveTo(x + w, y - h * 0.5, x + w / 2, y); ctx.closePath();
+          ctx.fillStyle = gr; ctx.fill();
+        }
+      } else if (e.tipo === "arco") {
+        // arco eléctrico en zigzag que tiembla
+        const [x1, y1] = e.centro, [x2, y2] = e.hasta;
+        const L = Math.hypot(x2 - x1, y2 - y1) || 1, px = -(y2 - y1) / L, py = (x2 - x1) / L;
+        for (const [ancho, col] of [[5, `rgba(120,190,255,${0.35 * (1 - t)})`], [1.8, `rgba(240,250,255,${1 - t})`]]) {
+          ctx.beginPath(); ctx.moveTo(x1, y1);
+          for (let k = 1; k < 8; k++) { const f = k / 8, d = Math.sin(e.semilla + k * 7 + t * 40) * 7; ctx.lineTo(x1 + (x2 - x1) * f + px * d, y1 + (y2 - y1) * f + py * d); }
+          ctx.lineTo(x2, y2); ctx.strokeStyle = col; ctx.lineWidth = ancho; ctx.lineJoin = "round"; ctx.stroke();
+        }
+      } else if (e.tipo === "texto") {
+        // letrero que salta y sube mientras se desvanece
+        const esc = t < 0.15 ? 0.6 + 0.4 * (t / 0.15) * 1.15 : 1;
+        ctx.save(); ctx.translate(e.centro[0], e.centro[1] - 18 * t); ctx.scale(esc, esc);
+        ctx.globalAlpha = t > 0.7 ? (1 - t) / 0.3 : 1;
+        ctx.font = cv.fuente(15, true); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.lineWidth = 4; ctx.strokeStyle = cv.COLOR_FONDO_LIENZO; ctx.strokeText(e.texto, 0, 0);
+        ctx.fillStyle = e.color; ctx.fillText(e.texto, 0, 0);
+        ctx.restore();
+      } else if (e.tipo === "ping") {
         const r = 5 + (e.radioFinal - 5) * suavizar(t);
         ctx.beginPath(); ctx.arc(e.centro[0], e.centro[1], r, 0, Math.PI * 2);
         ctx.strokeStyle = mezclarColor(e.color, cv.COLOR_FONDO_LIENZO, t); ctx.lineWidth = this.suave ? 1.5 : 2; ctx.stroke();

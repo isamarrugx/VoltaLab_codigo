@@ -36,7 +36,7 @@ export default function LienzoVista({ opciones = {}, onListo, onCambio, onSelecc
           <button className="txt" onClick={() => inst.current?.ajustar()} title="Ajustar el circuito a la pantalla">Ajustar</button>
           <button className="txt" onClick={() => { const z = zona.current; if (!z) return; if (document.fullscreenElement) document.exitFullscreen(); else z.requestFullscreen?.(); setTimeout(() => setPleno(!!document.fullscreenElement), 300); }} title="Pantalla completa para proyectar">{pleno ? "Salir" : "Proyectar"}</button>
         </div>) : null}
-      {centrar ? <div className="ayuda-zoom">{opciones.editable === false ? "Rueda: zoom · Arrastra el fondo: mover" : "Arrastra el fondo: seleccionar · Espacio + arrastrar: mover"}</div> : null}
+      {centrar ? <div className="ayuda-zoom">Arrastra el fondo: seleccionar · Espacio + arrastrar: mover</div> : null}
       {children}
     </div>
   );

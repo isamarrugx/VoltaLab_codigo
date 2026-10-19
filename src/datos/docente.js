@@ -17,6 +17,10 @@ export const FICHAS = {
     criterios: ["Explica que Req baja al agregar ramas.", "Predice qué rama lleva más corriente."], errores: ["Sumar las resistencias como en serie.", "Pensar que la corriente es igual en todas las ramas."] },
   potencia: { min: 10, objetivo: "Relacionar potencia con brillo usando P = V × I.", previos: "Ley de Ohm.", uso: "Evaluación formativa con cálculos cortos.",
     criterios: ["Calcula P con V e I.", "Relaciona más potencia con más brillo."], errores: ["Confundir potencia con energía total.", "Creer que más resistencia siempre da más potencia."] },
+  limites: { min: 12, objetivo: "Relacionar la potencia máxima de una pieza con P = V² / R y explicar por qué se funde.", previos: "Potencia eléctrica.", uso: "Pedir la predicción del voltaje de falla antes de subirlo; discutir por qué reemplazar no basta.",
+    criterios: ["Calcula P = V² / R y la compara con la potencia máxima.", "Explica que una pieza fundida abre el circuito."], errores: ["Reemplazar la pieza sin corregir la causa.", "Creer que la potencia crece igual que el voltaje (y no con su cuadrado)."] },
+  proteccion: { min: 12, objetivo: "Explicar el cortocircuito con la ley de Ohm y elegir un fusible adecuado.", previos: "Cuando algo se quema; serie y paralelo.", uso: "Demostración proyectada: cerrar el atajo con y sin fusible.",
+    criterios: ["Explica por qué un camino sin resistencia dispara la corriente.", "Elige un fusible un poco mayor que la corriente normal."], errores: ["Elegir el fusible más grande «por seguridad».", "Conectar el fusible en paralelo."] },
   serie_paralelo: { min: 12, objetivo: "Comparar el comportamiento de los mismos componentes en serie y en paralelo.", previos: "Serie y paralelo.", uso: "Cierre del tema o evaluación formativa.",
     criterios: ["Predice el brillo en cada conexión.", "Explica qué pasa si un bombillo se quita."], errores: ["Creer que en paralelo los bombillos brillan menos."] },
 

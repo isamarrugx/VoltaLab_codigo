@@ -122,7 +122,20 @@ function etiquetaLado(ctx, t, mx, my, px, py, d, color) {
   } else texto(ctx, t, mx - px * d, my - py * d, color, fuente(12));
 }
 
-export function dibujarResistencia(ctx, x1, y1, x2, y2, valor, seleccionada = false, conEtiqueta = true) {
+// Color del cuerpo según el calor (θ = fracción de su potencia máxima): beige → naranja → rojo.
+function colorCalor(calor) {
+  if (!(calor > 0.35)) return COLOR_CUERPO_RESISTENCIA;
+  const t = Math.min(1, (calor - 0.35) / 0.65);
+  return t < 0.6 ? mezclarColor(COLOR_CUERPO_RESISTENCIA, "#F08C3A", t / 0.6) : mezclarColor("#F08C3A", "#D9381E", (t - 0.6) / 0.4);
+}
+// Halo de calor alrededor de una pieza caliente (solo si de verdad se está calentando).
+export function dibujarCalor(ctx, x1, y1, x2, y2, calor, fondo = COLOR_FONDO_LIENZO) {
+  const e = ejes(x1, y1, x2, y2); if (!e || !(calor > 0.55)) return;
+  const f = Math.min(1, (calor - 0.55) / 0.5);
+  for (const [r, a] of [[22, 0.12], [15, 0.22]]) ovalo(ctx, e.mx, e.my, r + 6 * f, r * 0.7 + 4 * f, mezclarColor(fondo, "#F2683A", a * f));
+}
+
+export function dibujarResistencia(ctx, x1, y1, x2, y2, valor, seleccionada = false, conEtiqueta = true, { calor = 0, danado = false } = {}) {
   const e = ejes(x1, y1, x2, y2); if (!e) return;
   const { L, ux, uy, px, py, mx, my } = e;
   const lc = Math.min(46, L * 0.6);
@@ -134,7 +147,15 @@ export function dibujarResistencia(ctx, x1, y1, x2, y2, valor, seleccionada = fa
   poligono(ctx, [
     [cx1 + px * sa, cy1 + py * sa], [cx2 + px * sa, cy2 + py * sa],
     [cx2 - px * sa, cy2 - py * sa], [cx1 - px * sa, cy1 - py * sa],
-  ], COLOR_CUERPO_RESISTENCIA, seleccionada ? E.COLOR_ACENTO : COLOR_BORDE_RESISTENCIA, seleccionada ? 2.5 : 1.5);
+  ], danado ? "#3B3430" : colorCalor(calor), seleccionada ? E.COLOR_ACENTO : danado ? "#1E1A17" : COLOR_BORDE_RESISTENCIA, seleccionada ? 2.5 : 1.5);
+  if (danado) {
+    // cuerpo carbonizado con una grieta: la resistencia quedó abierta
+    ctx.beginPath(); ctx.moveTo(mx - ux * 4 + px * sa, my - uy * 4 + py * sa); ctx.lineTo(mx + ux * 3 + px * 2, my + uy * 3 + py * 2);
+    ctx.lineTo(mx - ux * 2 - px * 3, my - uy * 2 - py * 3); ctx.lineTo(mx + ux * 4 - px * sa, my + uy * 4 - py * sa);
+    ctx.strokeStyle = "#F08C3A"; ctx.lineWidth = 1.6; ctx.lineJoin = "round"; ctx.stroke();
+    if (conEtiqueta) etiquetaLado(ctx, "Quemada", mx, my, px, py, sa + 14, E.COLOR_ERROR);
+    return;
+  }
   const colores = [...bandasDeColor(valor), TOLERANCIA_ORO];
   const ab = lc * 0.11;
   colores.forEach((color, i) => {
@@ -181,14 +202,23 @@ export function dibujarResplandor(ctx, x1, y1, x2, y2, brillo, fondo = COLOR_FON
   }
 }
 
-export function dibujarBombillo(ctx, x1, y1, x2, y2, valor, brillo = null, seleccionada = false, conEtiqueta = true) {
+export function dibujarBombillo(ctx, x1, y1, x2, y2, valor, brillo = null, seleccionada = false, conEtiqueta = true, { danado = false, calor = 0 } = {}) {
   const e = ejes(x1, y1, x2, y2); if (!e) return;
   const { L, ux, uy, px, py, mx, my } = e;
   const radio = Math.min(16, L * 0.32);
   linea(ctx, x1, y1, mx - ux * radio, my - uy * radio, COLOR_LEAD, 2.4);
   linea(ctx, x2, y2, mx + ux * radio, my + uy * radio, COLOR_LEAD, 2.4);
-  const borde = seleccionada ? E.COLOR_ACENTO : brillo && brillo > 0.05 ? COLOR_BORDE_BOMBILLO_ENCENDIDO : COLOR_BORDE_RESISTENCIA;
-  ovalo(ctx, mx, my, radio, radio, colorBrilloBombillo(brillo), borde, seleccionada ? 2 : 1.5);
+  const borde = seleccionada ? E.COLOR_ACENTO : danado ? "#5B534A" : calor > 1 ? E.COLOR_ERROR : brillo && brillo > 0.05 ? COLOR_BORDE_BOMBILLO_ENCENDIDO : COLOR_BORDE_RESISTENCIA;
+  ovalo(ctx, mx, my, radio, radio, danado ? "#B8B1A6" : colorBrilloBombillo(brillo), borde, seleccionada || calor > 1 ? 2 : 1.5);
+  if (danado) {
+    // vidrio ennegrecido y filamento cortado en dos
+    ovalo(ctx, mx - px * radio * 0.35, my - py * radio * 0.35, radio * 0.55, radio * 0.4, "rgba(60,52,44,.35)");
+    const a = [mx - ux * radio * 0.55, my - uy * radio * 0.55], b = [mx + ux * radio * 0.55, my + uy * radio * 0.55];
+    linea(ctx, a[0], a[1], mx - ux * 3 + px * 4, my - uy * 3 + py * 4, "#4A4238", 1.5, "round");
+    linea(ctx, b[0], b[1], mx + ux * 3 - px * 3, my + uy * 3 - py * 3, "#4A4238", 1.5, "round");
+    if (conEtiqueta) etiquetaLado(ctx, "Fundido", mx, my, px, py, radio + 14, E.COLOR_ERROR);
+    return;
+  }
   // reflejo del vidrio
   const rr = radio * 0.7;
   ctx.beginPath(); ctx.arc(mx, my, rr, -(110 + 60) * Math.PI / 180, -110 * Math.PI / 180);
@@ -236,8 +266,39 @@ export function dibujarInterruptor(ctx, x1, y1, x2, y2, cerrado, seleccionada = 
   linea(ctx, ca[0], ca[1], punta[0], punta[1], colorEstado, grosor, "round");
   ovalo(ctx, ca[0], ca[1], radio, radio, colorEstado);
   if (conEtiqueta) {
-    texto(ctx, cerrado ? "Cerrado" : "Abierto", mx - px * (sa + 12) + ux * 14, my - py * (sa + 12) + uy * 14, colorEstado, fuente(12, true));
+    const t = cerrado ? "Cerrado" : "Abierto";
+    if (Math.abs(px) > 0.7) {
+      // de pie: el texto va al costado, del lado opuesto a la palanca, sin tapar la caja
+      const lado = -px > 0 ? 1 : -1;
+      texto(ctx, t, mx + lado * (sa + 8), my, colorEstado, fuente(12, true), lado > 0 ? "left" : "right");
+    } else texto(ctx, t, mx - px * (sa + 12) + ux * 14, my - py * (sa + 12) + uy * 14, colorEstado, fuente(12, true));
   }
+}
+
+// Fusible: tubo de vidrio con un hilo. `calor` es su avance hacia la fusión (0 a 1).
+export function dibujarFusible(ctx, x1, y1, x2, y2, corriente, seleccionada = false, conEtiqueta = true, { calor = 0, danado = false } = {}) {
+  const e = ejes(x1, y1, x2, y2); if (!e) return;
+  const { L, ux, uy, px, py, mx, my } = e;
+  const lc = Math.min(40, L * 0.55), sa = 7;
+  const c1 = [mx - ux * lc / 2, my - uy * lc / 2], c2 = [mx + ux * lc / 2, my + uy * lc / 2];
+  linea(ctx, x1, y1, c1[0], c1[1], COLOR_LEAD, 2.4);
+  linea(ctx, x2, y2, c2[0], c2[1], COLOR_LEAD, 2.4);
+  const caja = (a, b, s) => [[a[0] + px * s, a[1] + py * s], [b[0] + px * s, b[1] + py * s], [b[0] - px * s, b[1] - py * s], [a[0] - px * s, a[1] - py * s]];
+  poligono(ctx, caja(c1, c2, sa), danado ? "#E9E3DA" : "#EEF5FA", seleccionada ? E.COLOR_ACENTO : "#8FA3B3", seleccionada ? 2.5 : 1.5);
+  // tapas metálicas
+  const t = 6;
+  poligono(ctx, caja(c1, [c1[0] + ux * t, c1[1] + uy * t], sa + 1), "#AEB6BF", "#7C8792", 1);
+  poligono(ctx, caja([c2[0] - ux * t, c2[1] - uy * t], c2, sa + 1), "#AEB6BF", "#7C8792", 1);
+  const h1 = [c1[0] + ux * t, c1[1] + uy * t], h2 = [c2[0] - ux * t, c2[1] - uy * t];
+  if (danado) {
+    linea(ctx, h1[0], h1[1], mx - ux * 4, my - uy * 4, "#5B534A", 1.6, "round");
+    linea(ctx, mx + ux * 4, my + uy * 4, h2[0], h2[1], "#5B534A", 1.6, "round");
+    ovalo(ctx, mx, my, 4, 3, "rgba(60,52,44,.25)");
+  } else {
+    const col = calor > 0.05 ? mezclarColor("#7C8792", "#FF6A1A", Math.min(1, calor * 1.4)) : "#7C8792";
+    linea(ctx, h1[0], h1[1], h2[0], h2[1], col, 1.6 + Math.min(1, calor), "round");
+  }
+  if (conEtiqueta) etiquetaLado(ctx, danado ? "Abierto" : `${+corriente.toPrecision(3)} A`, mx, my, px, py, sa + 14, danado ? E.COLOR_ERROR : E.COLOR_TEXTO_SECUNDARIO);
 }
 
 export function dibujarIcono(ctx, tipo, ancho, alto, { valor = null, cerrado = false, color = null } = {}) {
@@ -246,6 +307,7 @@ export function dibujarIcono(ctx, tipo, ancho, alto, { valor = null, cerrado = f
   else if (tipo === "bombillo") dibujarBombillo(ctx, x1, cy, x2, cy, valor || 10, 0.9, false, false);
   else if (tipo === "interruptor") dibujarInterruptor(ctx, x1, cy + 5, x2, cy + 5, cerrado, false, false);
   else if (tipo === "bateria") dibujarBateria(ctx, x1, cy - 4, x2, cy - 4, valor || 12, false, false);
+  else if (tipo === "fusible") dibujarFusible(ctx, x1, cy, x2, cy, valor || 0.5, false, false);
   else if (tipo === "cable") {
     dibujarCable(ctx, [[x1 + 2, alto - 10], [ancho / 2, alto - 10], [ancho / 2, 10], [x2 - 2, 10]], color || COLORES_CABLE[1][1]);
   } else if (tipo === "seleccionar") {

@@ -9,4 +9,4 @@ export function sugerenciaReto(reto, lecciones, hechas) {
   const l = lecciones.find((x) => x.clave === r);
   return `Te ayuda la lección «${l ? l.titulo : r}».`;
 }
-export const progresoInicial = () => ({ aprender: new Set(), laboratorio: new Set(), habilidades: new Set(), problemas: new Set(), estrellas: {}, docente: false, evidencias: {}, nombre: "" });
+export const progresoInicial = () => ({ aprender: new Set(), laboratorio: new Set(), habilidades: new Set(), problemas: new Set(), estrellas: {}, docente: false, evidencias: {}, nombre: "", sesiones: { nivel: 1, jugadas: 0, mejor: {}, ranking: [], insignias: [], errores: {} } });

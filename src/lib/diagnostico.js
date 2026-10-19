@@ -15,9 +15,11 @@ export function exportar(componentes, cables, incluirAbiertos = false) {
   const bornes = Object.values(componentes).flatMap((c) => [c.punto_a, c.punto_b]);
   segmentos = dividirEnUniones(segmentos, bornes);
   for (const [tag, c] of Object.entries(componentes)) {
+    // una pieza dañada (bombillo fundido, resistencia quemada, fusible abierto) es un camino abierto
+    if (c.danado && !incluirAbiertos) continue;
     if (c.tipo === "resistencia" || c.tipo === "bombillo") {
       resistencias.push([c.punto_a, c.punto_b, c.valor]); tagsR.push(tag);
-    } else if (c.tipo === "interruptor" && (c.cerrado || incluirAbiertos)) {
+    } else if ((c.tipo === "interruptor" && (c.cerrado || incluirAbiertos)) || c.tipo === "fusible") {
       segmentos.push([c.punto_a, c.punto_b]);
     } else if (c.tipo === "bateria") {
       bateria = [c.punto_a, c.punto_b, c.valor]; tagBateria = tag;
@@ -62,7 +64,7 @@ function caminoDeCables(componentes, cables, desde, hasta) {
     for (const [p1, p2] of dividirEnUniones(tr, todos)) unir(p1, p2, tag);
   }
   for (const [tag, c] of Object.entries(componentes)) {
-    if (c.tipo === "interruptor" && c.cerrado) unir(c.punto_a, c.punto_b, tag);
+    if ((c.tipo === "interruptor" && c.cerrado) || (c.tipo === "fusible" && !c.danado)) unir(c.punto_a, c.punto_b, tag);
   }
   const previo = new Map([[clave(desde), null]]);
   const cola = [desde];
@@ -126,6 +128,16 @@ export function diagnosticar(componentes, cables) {
   const camino = hayCamino(segmentos, resistencias, bateria);
   const sueltos = terminalesSueltos(componentes, cables);
   if (!camino) {
+    const danados = Object.entries(componentes).filter(([, c]) => c.danado).map(([t]) => t);
+    if (danados.length) {
+      const e2 = exportar(componentes, cables, true);
+      if (hayCamino(e2.segmentos, e2.resistencias, bateria)) {
+        const quien = danados.map((t) => componentes[t].tipo === "bombillo" ? "un bombillo fundido" : componentes[t].tipo === "fusible" ? "un fusible abierto" : "una resistencia quemada");
+        return res("abierto", "Pieza dañada",
+          `El circuito está completo, pero tiene ${[...new Set(quien)].join(" y ")}: por ahí ya no puede pasar la corriente.`,
+          "Selecciona la pieza resaltada y pulsa Reemplazar, o usa Reparar todo. Antes, cambia lo que la dañó.", [], danados);
+      }
+    }
     const abiertos = Object.entries(componentes).filter(([, c]) => c.tipo === "interruptor" && !c.cerrado).map(([t]) => t);
     if (abiertos.length) {
       const e2 = exportar(componentes, cables, true);

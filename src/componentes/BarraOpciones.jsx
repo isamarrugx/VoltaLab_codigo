@@ -5,6 +5,7 @@ import * as F from "../lib/formato.js";
 import { nombresComponentes } from "../lib/explicador.js";
 import { EJEMPLOS, ORDEN_EJEMPLOS, NOMBRES_CORTOS_EJEMPLOS } from "../datos/ejemplos.js";
 import { TECLA } from "../lienzo/Lienzo.js";
+import { ESPEC, ETIQUETA_ESTADO, estado } from "../lib/fallas.js";
 
 export const INFO = {
   seleccionar: ["Seleccionar y mover", `Clic para elegir una pieza; arrastra el fondo para elegir varias. ${TECLA}+Z deshace, ${TECLA}+C / ${TECLA}+V copia y pega.`],
@@ -13,13 +14,24 @@ export const INFO = {
   bombillo: ["Bombillo", "Convierte energía eléctrica en luz; brilla según la potencia P = V × I."],
   interruptor: ["Interruptor", "Abre o cierra el camino de la corriente. Con Mover, un clic lo alterna."],
   bateria: ["Batería", "Fuente de energía: empuja la corriente del + al −. Solo puede haber una."],
+  fusible: ["Fusible", "Protege el circuito: si pasa más corriente que su valor nominal, su hilo se funde y abre el camino."],
 };
-export const PRESETS = { resistencia: [100, 220, 470, 1000, 10000], bombillo: [5, 10, 22, 47, 100], bateria: [1.5, 3, 4.5, 9, 12] };
+// Flecha curva para deshacer; `espejo` la voltea para rehacer.
+function IconoFlecha({ espejo = false }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={espejo ? { transform: "scaleX(-1)" } : null}>
+      <path d="M9 14L4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+    </svg>
+  );
+}
+export const PRESETS = { resistencia: [100, 220, 470, 1000, 10000], bombillo: [5, 10, 22, 47, 100], bateria: [1.5, 3, 4.5, 9, 12], fusible: [0.1, 0.25, 0.5, 1, 2] };
+const UNIDAD = { bateria: "V", fusible: "A" };
+const ETIQUETA_VALOR = { bateria: "Voltaje:", fusible: "Corriente nominal:" };
 
 export function CampoValor({ tipo, valor, onAplicar, onError, presets = PRESETS, sugerido = null }) {
   const [txt, setTxt] = useState(F.gg(valor));
   useEffect(() => setTxt(F.gg(valor)), [valor]);
-  const unidad = tipo === "bateria" ? "V" : "Ω";
+  const unidad = UNIDAD[tipo] || "Ω";
   const confirmar = () => {
     const n = parseFloat(txt.replace(",", "."));
     if (Number.isNaN(n)) return onError("Escribe un número (por ejemplo 330).");
@@ -28,13 +40,13 @@ export function CampoValor({ tipo, valor, onAplicar, onError, presets = PRESETS,
   };
   return (
     <>
-      <span style={{ marginRight: 6 }}>{tipo === "bateria" ? "Voltaje:" : "Valor:"}</span>
+      <span style={{ marginRight: 6 }}>{ETIQUETA_VALOR[tipo] || "Valor:"}</span>
       {presets[tipo].map((p) => (
-        <button key={p} className={`btn sm ${Math.abs(p - valor) < 1e-9 ? "activo" : "crema"}`} style={{ minWidth: 50, margin: "0 2px", color: Math.abs(p - valor) < 1e-9 ? "#fff" : "var(--texto)", ...(sugerido != null && Math.abs(p - sugerido) < 1e-9 && Math.abs(p - valor) >= 1e-9 ? { background: "var(--elec)", borderColor: "var(--elec-oscuro)", fontWeight: 700 } : null) }} onClick={() => onAplicar(p)}>{F.fmtValor(p, unidad)}</button>
+        <button key={p} className={`btn opt ${Math.abs(p - valor) < 1e-9 ? "on" : sugerido != null && Math.abs(p - sugerido) < 1e-9 ? "exacto" : ""}`} style={{ margin: "0 2px" }} onClick={() => onAplicar(p)}>{F.fmtValor(p, unidad)}</button>
       ))}
       <input className="entrada" value={txt} onChange={(e) => setTxt(e.target.value)} onKeyDown={(e) => e.key === "Enter" && confirmar()} aria-label="Valor" />
       <span className="pequeno" style={{ marginLeft: 3 }}>{unidad}</span>
-      <button className="btn sm prim" style={{ marginLeft: 6, minWidth: 34, padding: "0 8px" }} onClick={confirmar}>OK</button>
+      <button className="btn sm prim" style={{ marginLeft: 6 }} onClick={confirmar}>OK</button>
     </>
   );
 }
@@ -50,11 +62,11 @@ export default function BarraOpciones({ L, herr, ejemplos, cerrarEjemplos, carga
     return (
       <div className="barra-opc tarjeta">
         <div className="cuerpo">
-          <div className="fila-t"><h3>Circuitos de ejemplo</h3><div className="acciones"><button className="btn sm crema" style={{ color: "var(--texto)", minWidth: 86 }} onClick={cerrarEjemplos}>Cerrar</button></div></div>
+          <div className="fila-t"><h3>Circuitos de ejemplo</h3><div className="acciones"><button className="btn sm" onClick={cerrarEjemplos}>Cerrar</button></div></div>
           <div className="desc" style={hover ? { color: "var(--acento)" } : null}>{hover || "Elegir uno reemplaza el circuito actual."}</div>
           <div className="controles" style={{ gap: 6 }}>
             {ORDEN_EJEMPLOS.map((k) => (
-              <button key={k} className="btn crema" style={{ height: 30, minWidth: 90, color: "var(--texto)" }}
+              <button key={k} className="btn sm"
                 onMouseEnter={() => setHover(`${EJEMPLOS[k].nombre}: ${EJEMPLOS[k].descripcion}`)} onMouseLeave={() => setHover(null)} onClick={() => cargarEjemplo(k)}>{NOMBRES_CORTOS_EJEMPLOS[k]}</button>
             ))}
           </div>
@@ -64,8 +76,9 @@ export default function BarraOpciones({ L, herr, ejemplos, cerrarEjemplos, carga
   }
   const historial = (
     <>
-      <button className="btn sm crema" style={{ minWidth: 34, color: "var(--texto)" }} disabled={!L.puedeDeshacer()} onClick={() => { L.deshacer(); accion(); }} aria-label="Deshacer" title={`Deshacer (${TECLA}+Z)`}>↶</button>
-      <button className="btn sm crema" style={{ minWidth: 34, color: "var(--texto)" }} disabled={!L.puedeRehacer()} onClick={() => { L.rehacer(); accion(); }} aria-label="Rehacer" title={`Rehacer (${TECLA}+Shift+Z)`}>↷</button>
+      {/* .acciones va de derecha a izquierda: rehacer primero para que se vea «deshacer · rehacer» */}
+      <button className="btn icono" disabled={!L.puedeRehacer()} onClick={() => { L.rehacer(); accion(); }} aria-label="Rehacer" title={`Rehacer (${TECLA}+Shift+Z)`}><IconoFlecha espejo /></button>
+      <button className="btn icono" disabled={!L.puedeDeshacer()} onClick={() => { L.deshacer(); accion(); }} aria-label="Deshacer" title={`Deshacer (${TECLA}+Z)`}><IconoFlecha /></button>
     </>
   );
   const nSel = L.seleccion.size;
@@ -78,9 +91,9 @@ export default function BarraOpciones({ L, herr, ejemplos, cerrarEjemplos, carga
             <h3>{nSel} elementos</h3><span className="chip">SELECCIÓN</span>
             <div className="acciones">
               {historial}
-              <button className="btn sm crema" style={{ minWidth: 86, color: "var(--texto)" }} onClick={() => { L.copiar(); accion(); }} title={`${TECLA}+C`}>Copiar</button>
-              <button className="btn sm crema" style={{ minWidth: 86, color: "var(--texto)" }} onClick={() => { L.duplicar(); accion(); }} title={`${TECLA}+D`}>Duplicar</button>
-              <button className="btn sm crema err" style={{ minWidth: 86 }} onClick={() => { L.eliminarSeleccionado(); accion(); }} title="Supr">Eliminar</button>
+              <button className="btn sm" onClick={() => { L.copiar(); accion(); }} title={`${TECLA}+C`}>Copiar</button>
+              <button className="btn sm" onClick={() => { L.duplicar(); accion(); }} title={`${TECLA}+D`}>Duplicar</button>
+              <button className="btn sm err" onClick={() => { L.eliminarSeleccionado(); accion(); }} title="Supr">Eliminar</button>
             </div>
           </div>
           <div className="desc">Arrastra cualquiera de las piezas para mover todo junto. Shift o {TECLA} + clic suma o quita piezas; Esc deselecciona.</div>
@@ -96,8 +109,18 @@ export default function BarraOpciones({ L, herr, ejemplos, cerrarEjemplos, carga
   const valor = tipo in PRESETS ? (editando ? elem.valor : L.valoresNuevos[tipo]) : null;
   const cerrado = editando && tipo === "interruptor" ? elem.cerrado : false;
   const color = editando && tipo === "cable" ? elem.color : L.colorCableActual;
+  const danado = editando && !!elem.danado;
+  // límites y estado térmico: solo cuando el simulador tiene activadas las fallas
+  const espec = L.fallasActivas && tipo !== "cable" ? ESPEC[tipo] : null;
+  const est = editando && L.fallasActivas && tipo !== "cable" && tipo !== "interruptor" && tipo !== "bateria" ? estado(elem, L.calor[tag] || 0) : null;
+  const limiteActual = espec ? (editando ? elem[espec.campo] ?? espec.def : L.especNuevas[tipo]) : null;
+  // potencia (o corriente, en el fusible) que recibe ahora frente a su límite
+  const fis = est && est !== "dañado" && L.fuente && L.fuente.piezas[tag];
+  const carga = !fis ? null : tipo === "fusible" ? `${F.amperios(fis.I)} de ${F.fmtValor(elem.valor, "A")}` : `${F.vatios(fis.P)} de ${F.fmtValor(limiteActual, "W")}`;
+  const aplicarEspec = (v) => { if (editando) L.establecerEspec(tag, v); else L.especNuevas[tipo] = v; accion(); };
   let chip = null;
-  if (editando) chip = "SELECCIONADO"; else if (tipo !== "seleccionar") chip = tipo !== "cable" ? "COLOCAR" : "DIBUJAR";
+  if (danado) chip = "DAÑADO";
+  else if (editando) chip = "SELECCIONADO"; else if (tipo !== "seleccionar") chip = tipo !== "cable" ? "COLOCAR" : "DIBUJAR";
   // La descripción larga queda oculta; se despliega con «?».
   let desc = verInfo || tipo === "seleccionar" ? desc0 : null, colorDesc = null;
   if (tipo === "bateria" && !editando && L.hayBateria()) { desc = "Ya hay una batería. Con Mover puedes cambiar su voltaje."; colorDesc = "var(--adv)"; }
@@ -109,12 +132,13 @@ export default function BarraOpciones({ L, herr, ejemplos, cerrarEjemplos, carga
       <IconoCanvas tipo={tipo} w={92} h={62} valor={valor} cerrado={cerrado} color={color} />
       <div className="cuerpo">
         <div className="fila-t">
-          <h3>{titulo}</h3>{chip ? <span className="chip">{chip}</span> : null}
+          <h3>{titulo}</h3>{chip ? <span className={`chip ${danado ? "err" : ""}`}>{chip}</span> : null}
           <div className="acciones">
             {historial}
+            {danado ? <button className="btn sm prim" onClick={() => { L.reparar(tag); accion(); }}>Reemplazar</button> : null}
             {tipo !== "seleccionar" ? <button className={`btn sm info ${verInfo ? "on" : ""}`} aria-label="Qué es esto" title="Qué es esto" onClick={() => setVerInfo((v) => !v)}>?</button> : null}
-            {editando ? <><button className="btn sm crema err" style={{ minWidth: 86 }} onClick={() => L.eliminarSeleccionado()}>Eliminar</button>
-              {tipo !== "cable" ? <button className="btn sm crema" style={{ minWidth: 86, color: "var(--texto)" }} onClick={() => { L.girar(tag); accion(); }}>Girar</button> : null}</> : null}
+            {editando ? <><button className="btn sm err" onClick={() => L.eliminarSeleccionado()}>Eliminar</button>
+              {tipo !== "cable" ? <button className="btn sm" onClick={() => { L.girar(tag); accion(); }}>Girar</button> : null}</> : null}
           </div>
         </div>
         {desc ? <div className="desc" style={colorDesc ? { color: colorDesc } : null}>{desc}</div> : null}
@@ -134,11 +158,18 @@ export default function BarraOpciones({ L, herr, ejemplos, cerrarEjemplos, carga
               })}
               <b style={{ marginLeft: 6 }}>{(COLORES_CABLE.find(([, h]) => h.toLowerCase() === color.toLowerCase()) || [""])[0]}</b>
             </>) : null}
+          {espec ? (
+            <span className="espec">
+              <span style={{ marginRight: 6 }}>{espec.etiqueta}:</span>
+              {espec.presets.map((v) => (
+                <button key={v} className={`btn opt ${Math.abs(v - limiteActual) < 1e-9 ? "on" : ""}`} style={{ margin: "0 2px" }} onClick={() => aplicarEspec(v)}>{F.fmtValor(v, espec.unidad)}</button>))}
+            </span>) : null}
+          {est ? <span className={`estado-pieza ${est === "dañado" ? "danado" : est}`}>{ETIQUETA_ESTADO[est]}{carga ? ` · ${carga}` : ""}</span> : null}
           {tipo === "interruptor" && editando ? (
             <>
               <span style={{ marginRight: 6 }}>Estado:</span>
               {[[true, "Cerrado"], [false, "Abierto"]].map(([e, t]) => (
-                <button key={t} className={`btn sm ${e === elem.cerrado ? "activo" : "crema"}`} style={{ margin: "0 2px", color: e === elem.cerrado ? "#fff" : "var(--texto)" }} onClick={() => { L.establecerInterruptor(tag, e); accion(); }}>{t}</button>))}
+                <button key={t} className={`btn opt ${e === elem.cerrado ? "on" : ""}`} style={{ margin: "0 2px" }} onClick={() => { L.establecerInterruptor(tag, e); accion(); }}>{t}</button>))}
             </>) : null}
         </div>
       </div>

@@ -12,11 +12,11 @@ const OBJETIVOS = [
 ];
 
 const PASOS = [
-  ["Empieza por el experimento de la portada", "Predice qué pasa con el bombillo y compruébalo. Es la idea central de todo el proyecto: primero piensas, después mides."],
-  ["Sigue las lecciones guiadas", "Están en orden. Cada una presenta un concepto, te propone experimentos cortos y termina con un reto."],
-  ["Resuelve los retos de laboratorio", "Construye el circuito que se pide. Si te atascas, pide una pista; las estrellas premian resolverlo con menos ayuda."],
-  ["Explora en el simulador libre", "Arma tus propios circuitos o carga uno de los ejemplos para modificarlo."],
-  ["Aplica con los problemas", "Para nivel intermedio y avanzado: escribe tu respuesta en cada paso y revisa el procedimiento completo al final."],
+  ["Prueba el experimento de la portada", "Un bombillo de 5 W conectado a 12 V: predice qué pasará y compruébalo. Es la idea de todo VOLTA: primero piensas, después ves qué pasa y entiendes por qué."],
+  ["Aprende paso a paso", "Las lecciones están en orden: cada una presenta una idea, te pide experimentar con el circuito y termina con un reto y una pregunta. El panel «Por dentro» muestra lo que no se ve: el agua en los tubos, los electrones, el filamento."],
+  ["Quema y repara", "En «Cuando algo se quema» y «Cortocircuitos y fusibles» las piezas fallan según los cálculos reales: descubres por qué se dañan y cómo evitarlo."],
+  ["Practica con los retos", "Construye el circuito que se pide. Si te atascas, pide una pista; las estrellas premian resolverlo con menos ayuda."],
+  ["Experimenta en el laboratorio libre", "Arma cualquier circuito y ponlo al límite: los bombillos se funden, las resistencias se queman, los fusibles se abren y la batería se protege."],
 ];
 
 const HERRAMIENTAS = [
@@ -25,6 +25,7 @@ const HERRAMIENTAS = [
   ["bombillo", "Bombillo", "Brilla según la potencia que recibe (P = V × I)."],
   ["interruptor", "Interruptor", "Abre o cierra el camino. Con la herramienta Mover, un clic lo alterna."],
   ["cable", "Cable", "Un clic para empezar, otro en cada doblez; termina al tocar una conexión."],
+  ["fusible", "Fusible", "Se funde si pasa más corriente que su valor nominal y protege el circuito."],
 ];
 
 const ATAJOS = [

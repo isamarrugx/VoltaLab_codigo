@@ -3,8 +3,8 @@ import * as F from "./formato.js";
 import { diagnosticar, exportar } from "./diagnostico.js";
 import { resolverCircuito, clasificarTopologia, construirNodos, ErrorCircuito, clave } from "./motor.js";
 
-const PREFIJOS = { resistencia: "R", bombillo: "B", interruptor: "S" };
-export const NOMBRE_TIPO = { resistencia: "resistencia", bombillo: "bombillo", interruptor: "interruptor", bateria: "batería" };
+const PREFIJOS = { resistencia: "R", bombillo: "B", interruptor: "S", fusible: "F" };
+export const NOMBRE_TIPO = { resistencia: "resistencia", bombillo: "bombillo", interruptor: "interruptor", bateria: "batería", fusible: "fusible" };
 
 const ordenTag = (t) => { const n = parseInt(String(t).split("_").pop(), 10); return Number.isNaN(n) ? 0 : n; };
 
@@ -27,6 +27,7 @@ export function componentesDesdeDefinicion(def) {
   for (const [a, b, v] of def.resistencias || []) componentes[tag()] = { tipo: "resistencia", punto_a: a, punto_b: b, valor: v };
   for (const [a, b, v] of def.bombillos || []) componentes[tag()] = { tipo: "bombillo", punto_a: a, punto_b: b, valor: v, brillo: null };
   for (const [a, b, c] of def.interruptores || []) componentes[tag()] = { tipo: "interruptor", punto_a: a, punto_b: b, cerrado: c };
+  for (const [a, b, v] of def.fusibles || []) componentes[tag()] = { tipo: "fusible", punto_a: a, punto_b: b, valor: v };
   for (const [a, b] of def.cables || []) cables[tag()] = { puntos: [a, b], color: "#4B625F" };
   return { componentes, cables };
 }
